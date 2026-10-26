@@ -204,7 +204,10 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                             collect(descendant)
 
                 collect(child)
+                event_index = len(events) + 1
                 event_record: dict[str, Any] = {
+                    "event_index": event_index,
+                    "event_id": f"{document_name}::event:{event_index:04d}",
                     "depth": depth,
                     "kind": tag,
                     "label": _display_label(child),
