@@ -168,3 +168,17 @@ def test_condition_and_action_details_preserve_inline_text(tmp_path: Path) -> No
     event = summary["event_outlines"][0]["events"][0]
     assert event["condition_details"][0]["text"] == "Score > 10"
     assert event["action_details"][0]["text"] == "Set score to 20"
+
+
+def test_reports_skipped_capx_xml_entries_in_diagnostics(tmp_path: Path) -> None:
+    project = tmp_path / "partial.capx"
+    with zipfile.ZipFile(project, "w") as archive:
+        archive.writestr("project.xml", b'<c2project><layouts><layout name="Safe" /></layouts></c2project>')
+        archive.writestr("broken.xml", b'<c2project><layout>')
+        archive.writestr("../outside.xml", b'<layout name="Unsafe" />')
+
+    summary = inspect_project(load_project(project))
+    assert "Safe" in summary["layouts"]
+    assert "Unsafe" not in summary["layouts"]
+    assert any("malformed or could not be read safely" in item for item in summary["diagnostics"])
+    assert any("unsafe paths" in item for item in summary["diagnostics"])
