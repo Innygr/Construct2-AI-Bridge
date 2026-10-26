@@ -68,8 +68,12 @@ def test_events_endpoint_explains_current_scope(tmp_path: Path) -> None:
     assert response.json()["event_sheets"] == ["Gameplay"]
     assert "best-effort" in response.json()["note"]
     assert response.json()["event_outlines"][0]["event_count"] == 1
-    assert response.json()["event_outlines"][0]["events"][0]["condition_count"] == 1
-    assert response.json()["event_outlines"][0]["events"][0]["action_count"] == 1
+    event = response.json()["event_outlines"][0]["events"][0]
+    assert event["condition_count"] == 1
+    assert event["action_count"] == 1
+    assert event["event_index"] == 1
+    assert event["event_id"] == "game.caproj::event:0001"
+    assert "diagnostics" in response.json()
 
 def test_home_page_includes_event_outline_view() -> None:
     response = client.get("/")
