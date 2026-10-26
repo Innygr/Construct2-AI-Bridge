@@ -9,6 +9,8 @@ The initial target AI sites are **ChatGPT**, **Claude**, and **Gemini**. The pop
 - **Firefox:** supported target; load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
 - **Opera GX:** intended Chromium-based target; compatibility is not yet verified. Load the unpacked extension through the extensions manager with developer mode enabled.
 - **Microsoft Edge:** intended Chromium-based target for Gemini; compatibility is not yet verified. Load the unpacked extension through `edge://extensions` with Developer mode enabled.
+- **Google Chrome:** intended Chromium-based target; compatibility is not yet verified. Open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**.
+- **Brave:** intended Chromium-based target; compatibility is not yet verified. Open `brave://extensions`, enable Developer mode, and choose **Load unpacked**.
 
 ## Browser installation details
 
@@ -27,7 +29,7 @@ Open `edge://extensions`, enable Developer mode, choose **Load unpacked**, and s
 ## Multi-AI workflow (manual, user-supervised)
 
 1. Start the local bridge with `construct2-ai-bridge` and open a project.
-2. Load the extension in Firefox and Opera GX.
+2. Load the extension in any browsers you have tested successfully (Firefox is the primary target; Chromium-based browsers still need compatibility testing).
 3. Open ChatGPT in one browser and Claude in the other, signed in normally.
 4. Fetch the same project summary in each extension and enter the same task.
 5. Choose **Parallel analysis** with different roles (for example, Architect in ChatGPT and Debugger in Claude). Prepare each prompt, fill each active tab, and submit it yourself. Both browsers can generate responses concurrently.
