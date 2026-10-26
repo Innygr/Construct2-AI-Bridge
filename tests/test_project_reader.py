@@ -152,3 +152,19 @@ def test_event_outline_preserves_explicit_disabled_state(tmp_path: Path) -> None
     assert [event.get("disabled") for event in events] == [
         True, False, True, False, None
     ]
+
+
+
+def test_condition_and_action_details_preserve_inline_text(tmp_path: Path) -> None:
+    project = tmp_path / "inline-text.xml"
+    project.write_text(
+        '<events><event name="Example">'
+        '<condition id="Compare">Score &gt; 10</condition>'
+        '<action id="Set">Set score to 20</action>'
+        '</event></events>',
+        encoding="utf-8",
+    )
+    summary = inspect_project(load_project(project))
+    event = summary["event_outlines"][0]["events"][0]
+    assert event["condition_details"][0]["text"] == "Score > 10"
+    assert event["action_details"][0]["text"] == "Set score to 20"
