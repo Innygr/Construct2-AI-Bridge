@@ -25,7 +25,8 @@ class ProjectDocument:
 def _parse_xml(data: bytes, label: str) -> ET.Element:
     if len(data) > MAX_XML_BYTES:
         raise ProjectReadError(f"XML file is too large to inspect: {label}")
-    if b"<!DOCTYPE" in data[:4096].upper() or b"<!ENTITY" in data[:4096].upper():
+    # Scan the entire bounded document: a legal prolog can contain long whitespace/comments.
+    if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
         raise ProjectReadError(f"DTD/entity declarations are not allowed: {label}")
     try:
         return ET.fromstring(data)
