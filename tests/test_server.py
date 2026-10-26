@@ -83,7 +83,9 @@ def test_home_page_includes_event_outline_view() -> None:
     assert "event.event_id" in response.text
     assert "Inspection note:" in response.text
     assert "DISABLED" in response.text
-    assert "Prepare AI context" in response.text
+    assert "Prepare debugging context" in response.text
+    assert "bug-description" in response.text
+    assert "BUG REPORT (user-provided)" in response.text
     assert "Copy context" in response.text
     assert "event-context-pick" in response.text
     assert "Include in AI context" in response.text
