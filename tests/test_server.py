@@ -1,10 +1,8 @@
 from pathlib import Path
-import zipfile
 
 from fastapi.testclient import TestClient
 
 from construct2_ai_bridge import server
-
 
 client = TestClient(server.app)
 
