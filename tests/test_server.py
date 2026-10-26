@@ -80,4 +80,7 @@ def test_home_page_includes_event_outline_view() -> None:
     assert response.status_code == 200
     assert 'id="event-outline"' in response.text
     assert "function renderOutline(summary)" in response.text
+    assert "event.event_id" in response.text
+    assert "Inspection note:" in response.text
+    assert "DISABLED" in response.text
     assert "Project report (JSON)" in response.text
