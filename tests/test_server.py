@@ -70,3 +70,10 @@ def test_events_endpoint_explains_current_scope(tmp_path: Path) -> None:
     assert response.json()["event_outlines"][0]["event_count"] == 1
     assert response.json()["event_outlines"][0]["events"][0]["condition_count"] == 1
     assert response.json()["event_outlines"][0]["events"][0]["action_count"] == 1
+
+def test_home_page_includes_event_outline_view() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="event-outline"' in response.text
+    assert "function renderOutline(summary)" in response.text
+    assert "Project report (JSON)" in response.text
