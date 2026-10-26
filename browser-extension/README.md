@@ -2,10 +2,27 @@
 
 Use logged-in AI websites in tabs you choose. Each site handles its own model session, login, account limits, and subscription requirements.
 
-## Supported AI sites and browsers\n\nThe initial target AI sites are **ChatGPT**, **Claude**, and **Gemini**. The popup labels the active tab when it recognizes one of these hosts. Host detection is only a convenience; filling prompts and capturing replies still use best-effort generic page selectors, so each site's current interface must be tested.\n\n- **Firefox:** supported target; load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.\n- **Opera GX:** intended Chromium-based target; compatibility is not yet verified. Load the unpacked extension through the extensions manager with developer mode enabled.\n- **Microsoft Edge:** intended Chromium-based target for Gemini; compatibility is not yet verified. Load the unpacked extension through `edge://extensions` with Developer mode enabled.\n\n## Browser installation details\n\n### Firefox\n\nLoad the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.\n\n### Opera GX\n\nOpen the extensions manager, enable developer mode, and load this folder as an unpacked extension. Opera GX is Chromium-based; compatibility is intended but not yet verified. A browser-specific manifest/build may be needed if Opera rejects Firefox-specific metadata or behaves differently.\n\n### Microsoft Edge\n\nOpen `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the `browser-extension` folder. This is intended but not yet verified.\n\n<!-- old browser section replaced below -->\n\n## Firefox and Opera GX
+## Supported AI sites and browsers
 
-- **Firefox:** load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
-- **Opera GX:** open the extensions manager, enable developer mode, and load this folder as an unpacked extension. Opera GX is Chromium-based; compatibility is intended but not yet verified. A browser-specific manifest/build may be needed if Opera rejects Firefox-specific metadata or behaves differently.
+The initial target AI sites are **ChatGPT**, **Claude**, and **Gemini**. The popup labels the active tab when it recognizes one of these hosts. Host detection is only a convenience; filling prompts and capturing replies still use best-effort generic page selectors, so each site's current interface must be tested.
+
+- **Firefox:** supported target; load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
+- **Opera GX:** intended Chromium-based target; compatibility is not yet verified. Load the unpacked extension through the extensions manager with developer mode enabled.
+- **Microsoft Edge:** intended Chromium-based target for Gemini; compatibility is not yet verified. Load the unpacked extension through `edge://extensions` with Developer mode enabled.
+
+## Browser installation details
+
+### Firefox
+
+Load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
+
+### Opera GX
+
+Open the extensions manager, enable developer mode, and load this folder as an unpacked extension. Opera GX is Chromium-based; compatibility is intended but not yet verified. A browser-specific manifest/build may be needed if Opera rejects Firefox-specific metadata or behaves differently.
+
+### Microsoft Edge
+
+Open `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the `browser-extension` folder. This is intended but not yet verified.
 
 ## Multi-AI workflow (manual, user-supervised)
 
