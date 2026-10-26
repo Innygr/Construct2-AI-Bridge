@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 const adapters = require("../provider-adapters.js");
 
 test("detects supported providers by exact host or subdomain", () => {
@@ -33,4 +36,20 @@ test("returns provider-specific reply selectors and empty generic fallback", () 
   assert.deepEqual(adapters.getReplySelectors("claude.ai"), ['[data-testid="chat-message"]', '.font-claude-message']);
   assert.deepEqual(adapters.getReplySelectors("gemini.google.com"), ['message-content .markdown', 'model-response .markdown', '.model-response-text']);
   assert.deepEqual(adapters.getReplySelectors("example.org"), []);
+});
+
+test("popup JavaScript parses and loads the adapter before using it", () => {
+  const extensionDir = path.resolve(__dirname, "..");
+  const popupSource = fs.readFileSync(path.join(extensionDir, "popup.js"), "utf8");
+  const html = fs.readFileSync(path.join(extensionDir, "popup.html"), "utf8");
+  assert.doesNotThrow(() => new vm.Script(popupSource, { filename: "popup.js" }));
+  assert.ok(html.indexOf('src="provider-adapters.js"') < html.indexOf('src="popup.js"'));
+});
+
+test("manifest keeps the connector on Manifest V3 with narrowly scoped local host access", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../manifest.json"), "utf8"));
+  assert.equal(manifest.manifest_version, 3);
+  assert.ok(manifest.permissions.includes("activeTab"));
+  assert.ok(manifest.permissions.includes("scripting"));
+  assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1:8765/*"]);
 });
