@@ -68,7 +68,7 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
     raise ProjectReadError("Unsupported file type. Choose a .capx, .caproj, .c2proj, or XML file.")
 
 def _local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1].lower()
+    return tag.rsplit("}", 1)[-1].lower().replace("-", "").replace("_", "")
 
 def _attr(element: ET.Element, *names: str) -> str | None:
     wanted = {n.lower() for n in names}
