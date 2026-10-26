@@ -132,6 +132,9 @@ def _node_summary(element: ET.Element) -> dict[str, Any]:
         value = _attr(element, key)
         if value:
             details[key] = value[:160]
+    text_value = (element.text or "").strip()
+    if text_value:
+        details["text"] = text_value[:160]
     params: list[dict[str, str]] = []
     for child in element.iter():
         if child is element or _local_name(child.tag) not in {"param", "parameter"}:
