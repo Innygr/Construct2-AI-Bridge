@@ -2,6 +2,19 @@ const api = globalThis.browser ?? globalThis.chrome;
 const $ = (id) => document.getElementById(id);
 const status = (message, bad = false) => { $("status").textContent = message; $("status").style.color = bad ? "#ffaaaa" : "#c9baff"; };
 
+async function detectProvider() {
+  try {
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+    const host = new URL(tab?.url || "about:blank").hostname.toLowerCase();
+    let provider = "Other / unsupported site";
+    if (host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com") provider = "ChatGPT";
+    else if (host === "claude.ai" || host.endsWith(".claude.ai")) provider = "Claude";
+    else if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) provider = "Gemini";
+    $("provider").value = provider + (tab?.url?.startsWith("http") ? " — " + host : "");
+  } catch { $("provider").value = "Could not identify active tab"; }
+}
+detectProvider();
+
 $("fetch").addEventListener("click", async () => {
   status("Fetching local project summary…");
   try {
