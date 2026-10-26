@@ -48,3 +48,25 @@ def test_ignores_traversal_named_xml_entries(tmp_path: Path) -> None:
     assert "Safe" in summary["layouts"]
     assert "ShouldNotAppear" not in summary["layouts"]
     assert all(".." not in name.split("/") for name in summary["xml_documents"])
+
+
+def test_builds_nested_event_outline_with_conditions_and_actions(tmp_path: Path) -> None:
+    project = tmp_path / "events.xml"
+    project.write_text(
+        '<events><event name="On start">'
+        '<conditions><condition id="system-on-start" /></conditions>'
+        '<actions><action name="Set score" /></actions>'
+        '<subevents><event name="Nested event">'
+        '<conditions><condition name="Compare score" /></conditions>'
+        '</event></subevents></event></events>',
+        encoding="utf-8",
+    )
+    summary = inspect_project(load_project(project))
+    outline = summary["event_outlines"][0]
+    assert outline["event_count"] == 2
+    assert outline["events"][0]["label"] == "On start"
+    assert outline["events"][0]["condition_count"] == 1
+    assert outline["events"][0]["action_count"] == 1
+    assert outline["events"][0]["child_event_count"] == 1
+    assert outline["events"][1]["depth"] == 1
+    assert outline["events"][1]["label"] == "Nested event"
