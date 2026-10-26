@@ -56,7 +56,9 @@ def test_open_missing_file_returns_client_error(tmp_path: Path) -> None:
 def test_events_endpoint_explains_current_scope(tmp_path: Path) -> None:
     project = tmp_path / "game.caproj"
     project.write_text(
-        '<c2project><eventSheets><eventSheet name="Gameplay" /></eventSheets></c2project>',
+        '<c2project><eventSheets><eventSheet name="Gameplay" /></eventSheets>'
+        '<event name="On start"><conditions><condition id="start" /></conditions>'
+        '<actions><action name="Set score" /></actions></event></c2project>',
         encoding="utf-8",
     )
     assert client.post("/api/project/open", json={"path": str(project)}).status_code == 200
@@ -64,4 +66,7 @@ def test_events_endpoint_explains_current_scope(tmp_path: Path) -> None:
     response = client.get("/api/events")
     assert response.status_code == 200
     assert response.json()["event_sheets"] == ["Gameplay"]
-    assert "planned" in response.json()["note"]
+    assert "best-effort" in response.json()["note"]
+    assert response.json()["event_outlines"][0]["event_count"] == 1
+    assert response.json()["event_outlines"][0]["events"][0]["condition_count"] == 1
+    assert response.json()["event_outlines"][0]["events"][0]["action_count"] == 1
