@@ -18,7 +18,7 @@ Phase A foundation and read-only inspection, early development. Includes a local
 On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open http://127.0.0.1:8765.
 
 ## Browser-based AI without API keys
-See [browser-extension/README.md](browser-extension/README.md). The extension is designed for Firefox and intended for Opera GX compatibility. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. This first implementation is manual and user-supervised: it prepares prompts and captures visible replies but does not auto-submit or edit project files.
+See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini across Firefox, Opera GX, and Microsoft Edge (Chromium browser compatibility is intended but not yet verified). Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. This first implementation is manual and user-supervised: it prepares prompts and captures visible replies but does not auto-submit or edit project files.
 
 ## API
 - GET /api/status — service status.
