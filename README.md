@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation and read-only inspection, early development. The initial build includes a local API, browser interface, CAPX ZIP inspection, and XML-based project summaries. The experimental browser connector is a no-API-key route for using an AI website in a tab you choose.
+Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection, XML-based project summaries, and an experimental browser extension for user-supervised AI workflows.
 
 ## Requirements
 - Python 3.10+
@@ -15,19 +15,19 @@ Phase A foundation and read-only inspection, early development. The initial buil
     python -m pip install -e ".[dev]"
     construct2-ai-bridge
 
-On Windows PowerShell, activate with .venv\Scripts\Activate.ps1. Then open http://127.0.0.1:8765.
+On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open http://127.0.0.1:8765.
 
-## Browser-based AI (no API key)
-See [browser-extension/README.md](browser-extension/README.md) for the experimental Firefox connector. It lets you fetch local project context, prepare a prompt, insert it into the AI tab you selected, and capture visible response text for review. You still use the AI website's normal login/account and must follow that site's policies. No automatic submission or project-file edits are enabled in this early connector.
+## Browser-based AI without API keys
+See [browser-extension/README.md](browser-extension/README.md). The extension is designed for Firefox and intended for Opera GX compatibility. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. This first implementation is manual and user-supervised: it prepares prompts and captures visible replies but does not auto-submit or edit project files.
 
 ## API
 - GET /api/status — service status.
-- POST /api/project/open — JSON body {"path": "/absolute/path/to/game.capx"}.
+- POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project.
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names and lightweight XML-derived counts.
 
-The project path is read on the machine running the bridge. Keep this service local and only use trusted project files.
+Keep the service local and only use trusted project files.
 
 ## Roadmap
 1. A0 — local service, UI, project loading.
@@ -48,4 +48,4 @@ The project path is read on the machine running the bridge. Keep this service lo
 - Independent community project, not affiliated with Scirra.
 
 ## License
-MIT. See LICENSE.
+MIT. See LICENSE
