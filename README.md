@@ -52,3 +52,5 @@ MIT. See LICENSE
 
 
 Event outlines preserve explicit event disabled/enabled flags when the project XML provides recognizable boolean attributes. Missing or unknown values are not guessed.
+
+Condition/action details retain short inline text when present, alongside attribute-based parameters.
