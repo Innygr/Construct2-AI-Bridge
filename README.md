@@ -25,7 +25,7 @@ See [browser-extension/README.md](browser-extension/README.md). The extension ta
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with nesting depth and condition/action labels where detectable.
 - GET /api/objects — object types, families, and global variables.
-- GET /api/events — event-sheet names and lightweight XML-derived counts. Event outlines are also included in the project summary; they are heuristic and may not map every Construct 2 version's event format.
+- GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines. Outlines are heuristic and may not map every Construct 2 version's event format.
 
 Keep the service local and only use trusted project files.
 
