@@ -70,3 +70,17 @@ def test_builds_nested_event_outline_with_conditions_and_actions(tmp_path: Path)
     assert outline["events"][0]["child_event_count"] == 1
     assert outline["events"][1]["depth"] == 1
     assert outline["events"][1]["label"] == "Nested event"
+
+def test_extracts_parameter_attributes_for_conditions_and_actions(tmp_path: Path) -> None:
+    project = tmp_path / "parameter-events.xml"
+    project.write_text(
+        '<events><event name="Example">'
+        '<condition id="Compare"><param name="left" value="Score" /></condition>'
+        '<action name="Set"><param name="right" value="10" /></action>'
+        '</event></events>',
+        encoding="utf-8",
+    )
+    summary = inspect_project(load_project(project))
+    event = summary["event_outlines"][0]["events"][0]
+    assert event["condition_details"][0]["parameters"][0]["value"] == "Score"
+    assert event["action_details"][0]["parameters"][0]["value"] == "10"
