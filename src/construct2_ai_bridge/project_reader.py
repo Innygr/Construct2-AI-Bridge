@@ -11,6 +11,7 @@ MAX_XML_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_XML_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 20000
 MAX_OUTLINE_EVENTS = 1000
+MAX_XML_DEPTH = 128
 EVENT_TAGS = {"event", "block", "foreach", "for", "while", "group"}
 
 class ProjectReadError(ValueError):
@@ -29,9 +30,20 @@ def _parse_xml(data: bytes, label: str) -> ET.Element:
     if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
         raise ProjectReadError(f"DTD/entity declarations are not allowed: {label}")
     try:
-        return ET.fromstring(data)
+        root = ET.fromstring(data)
     except ET.ParseError as exc:
         raise ProjectReadError(f"Invalid XML in {label}: {exc}") from exc
+    # Deeply nested XML can trigger recursion failures in later tree inspection.
+    # Validate depth iteratively before handing the tree to the recursive summarizer.
+    stack: list[tuple[ET.Element, int]] = [(root, 1)]
+    while stack:
+        element, depth = stack.pop()
+        if depth > MAX_XML_DEPTH:
+            raise ProjectReadError(
+                f"XML nesting exceeds the {MAX_XML_DEPTH}-level safety limit: {label}"
+            )
+        stack.extend((child, depth + 1) for child in element)
+    return root
 
 def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
     path = Path(project_path).expanduser().resolve()
