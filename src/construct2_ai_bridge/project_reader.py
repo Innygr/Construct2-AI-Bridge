@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -22,6 +22,7 @@ class ProjectDocument:
     path: str
     kind: str
     xml_documents: list[tuple[str, bytes]]
+    diagnostics: list[str] = field(default_factory=list)
 
 def _parse_xml(data: bytes, label: str) -> ET.Element:
     if len(data) > MAX_XML_BYTES:
@@ -52,6 +53,7 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
     suffix = path.suffix.lower()
     if suffix == ".capx":
         docs: list[tuple[str, bytes]] = []
+        skipped_unsafe = skipped_oversized = skipped_total_limit = skipped_unreadable = 0
         try:
             with zipfile.ZipFile(path, "r") as archive:
                 members = archive.infolist()
@@ -60,25 +62,42 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
                 total_xml_bytes = 0
                 for member in members:
                     name = member.filename.replace("\\", "/")
+                    is_xml = name.lower().endswith((".xml", ".caproj", ".c2proj"))
                     if name.startswith("/") or any(part == ".." for part in name.split("/")):
+                        if is_xml:
+                            skipped_unsafe += 1
                         continue
-                    if member.is_dir() or not name.lower().endswith((".xml", ".caproj", ".c2proj")) or member.file_size > MAX_XML_BYTES:
+                    if member.is_dir() or not is_xml:
+                        continue
+                    if member.file_size > MAX_XML_BYTES:
+                        skipped_oversized += 1
                         continue
                     # Bound aggregate XML memory use, not just each individual entry.
                     if total_xml_bytes + member.file_size > MAX_TOTAL_XML_BYTES:
+                        skipped_total_limit += 1
                         continue
                     try:
                         data = archive.read(member)
                         _parse_xml(data, name)
                         total_xml_bytes += len(data)
                     except (OSError, zipfile.BadZipFile, RuntimeError, ProjectReadError):
+                        skipped_unreadable += 1
                         continue
                     docs.append((name, data))
         except (zipfile.BadZipFile, OSError) as exc:
             raise ProjectReadError(f"Could not read .capx archive: {exc}") from exc
         if not docs:
             raise ProjectReadError("No readable XML documents were found inside this .capx file.")
-        return ProjectDocument(str(path), "capx", docs)
+        diagnostics: list[str] = []
+        if skipped_unsafe:
+            diagnostics.append(f"Skipped {skipped_unsafe} XML archive entries with unsafe paths.")
+        if skipped_oversized:
+            diagnostics.append(f"Skipped {skipped_oversized} XML archive entries exceeding the per-file size limit.")
+        if skipped_total_limit:
+            diagnostics.append(f"Skipped {skipped_total_limit} XML archive entries because the aggregate XML size limit would be exceeded.")
+        if skipped_unreadable:
+            diagnostics.append(f"Skipped {skipped_unreadable} XML archive entries that were malformed or could not be read safely.")
+        return ProjectDocument(str(path), "capx", docs, diagnostics)
     if suffix in {".caproj", ".c2proj", ".xml"}:
         try:
             data = path.read_bytes()
@@ -255,7 +274,7 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
                 condition_count += 1
             elif tag == "action":
                 action_count += 1
-    diagnostics: list[str] = []
+    diagnostics: list[str] = list(document.diagnostics)
     if not layouts:
         diagnostics.append("No layout elements were detected in the readable XML documents.")
     if not event_sheets:
