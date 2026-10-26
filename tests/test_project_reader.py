@@ -84,3 +84,9 @@ def test_extracts_parameter_attributes_for_conditions_and_actions(tmp_path: Path
     event = summary["event_outlines"][0]["events"][0]
     assert event["condition_details"][0]["parameters"][0]["value"] == "Score"
     assert event["action_details"][0]["parameters"][0]["value"] == "10"
+
+def test_rejects_dtd_after_long_prolog_whitespace(tmp_path: Path) -> None:
+    file = tmp_path / "late-dtd.caproj"
+    file.write_bytes((b" " * 5000) + b'<!DOCTYPE foo [<!ENTITY x "boom">]><foo>&x;</foo>')
+    with pytest.raises(ProjectReadError, match="DTD/entity"):
+        load_project(file)
