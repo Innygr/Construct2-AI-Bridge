@@ -35,7 +35,7 @@ def main() -> int:
         raise SystemExit("No inline JavaScript found in inspector page.")
     for index, script in enumerate(inline_scripts, start=1):
         result = subprocess.run(
-            ["node", "--check"],
+            ["node", "--check", "-"],
             input=script,
             text=True,
             capture_output=True,
