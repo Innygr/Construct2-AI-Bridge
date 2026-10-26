@@ -132,3 +132,23 @@ def test_event_outline_reports_truncation_at_safety_limit(tmp_path: Path) -> Non
     outline = summary["event_outlines"][0]
     assert outline["event_count"] == MAX_OUTLINE_EVENTS
     assert outline["truncated"] is True
+
+
+
+def test_event_outline_preserves_explicit_disabled_state(tmp_path: Path) -> None:
+    project = tmp_path / "disabled-events.xml"
+    project.write_text(
+        '<events>'
+        '<event name="Disabled by flag" disabled="true" />'
+        '<event name="Enabled by flag" disabled="0" />'
+        '<event name="Disabled by enabled flag" enabled="false" />'
+        '<event name="Enabled by enabled flag" enabled="true" />'
+        '<event name="Unknown state" />'
+        '</events>',
+        encoding="utf-8",
+    )
+    summary = inspect_project(load_project(project))
+    events = summary["event_outlines"][0]["events"]
+    assert [event.get("disabled") for event in events] == [
+        True, False, True, False, None
+    ]
