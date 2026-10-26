@@ -45,7 +45,7 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
                     name = member.filename.replace("\\", "/")
                     if name.startswith("/") or any(part == ".." for part in name.split("/")):
                         continue
-                    if member.is_dir() or not name.lower().endswith(".xml") or member.file_size > MAX_XML_BYTES:
+                    if member.is_dir() or not name.lower().endswith((".xml", ".caproj", ".c2proj")) or member.file_size > MAX_XML_BYTES:
                         continue
                     try:
                         data = archive.read(member)
@@ -58,14 +58,14 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
         if not docs:
             raise ProjectReadError("No readable XML documents were found inside this .capx file.")
         return ProjectDocument(str(path), "capx", docs)
-    if suffix in {".caproj", ".xml"}:
+    if suffix in {".caproj", ".c2proj", ".xml"}:
         try:
             data = path.read_bytes()
         except OSError as exc:
             raise ProjectReadError(f"Could not read project file: {exc}") from exc
         _parse_xml(data, str(path))
         return ProjectDocument(str(path), "xml", [(path.name, data)])
-    raise ProjectReadError("Unsupported file type. Choose a .capx, .caproj, or XML file.")
+    raise ProjectReadError("Unsupported file type. Choose a .capx, .caproj, .c2proj, or XML file.")
 
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1].lower()
