@@ -59,16 +59,31 @@ $("fill").addEventListener("click", async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) throw new Error("No active tab found.");
     const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [prompt], func: (text) => {
-      const candidates = [...document.querySelectorAll('textarea:not([disabled]), [contenteditable="true"]:not([aria-disabled="true"])')].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-      const editor = candidates[candidates.length - 1];
-      if (!editor) return { ok: false, reason: "No visible text input found; this site may need a dedicated adapter." };
+      const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
+      const host = location.hostname.toLowerCase();
+      const selectors = host.includes("chatgpt.com") || host === "chat.openai.com"
+        ? ['#prompt-textarea', '[data-testid="prompt-textarea"]', 'main form [contenteditable="true"]']
+        : host === "claude.ai" || host.endsWith(".claude.ai")
+        ? ['[contenteditable="true"][data-placeholder]', 'div[contenteditable="true"]', 'fieldset textarea']
+        : host === "gemini.google.com" || host.endsWith(".gemini.google.com")
+        ? ['rich-textarea [contenteditable="true"]', 'div[contenteditable="true"]', 'textarea']
+        : ['textarea:not([disabled])', '[contenteditable="true"]:not([aria-disabled="true"])'];
+      let editor = null;
+      for (const selector of selectors) {
+        editor = [...document.querySelectorAll(selector)].filter(visible).at(-1);
+        if (editor) break;
+      }
+      if (!editor) return { ok: false, reason: "No supported visible message composer found. The AI site's interface may have changed." };
       editor.focus();
       if (editor instanceof HTMLTextAreaElement) {
         const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
         setter ? setter.call(editor, text) : editor.value = text;
         editor.dispatchEvent(new Event("input", { bubbles: true })); editor.dispatchEvent(new Event("change", { bubbles: true }));
-      } else { editor.textContent = text; editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text })); }
-      return { ok: true };
+      } else {
+        editor.replaceChildren(document.createTextNode(text));
+        editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      }
+      return { ok: true, composer: editor.tagName.toLowerCase() };
     }});
     const value = result?.[0]?.result;
     if (!value?.ok) throw new Error(value?.reason || "Could not fill the selected tab.");
@@ -82,11 +97,29 @@ $("capture").addEventListener("click", async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) throw new Error("No active tab found.");
     const result = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
-      const selectors = ['[data-message-author-role="assistant"]', '[data-testid*="conversation-turn"]', '[role="main"]', "main"];
+      const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const host = location.hostname.toLowerCase();
+      const selectors = host.includes("chatgpt.com") || host === "chat.openai.com"
+        ? ['[data-message-author-role="assistant"]']
+        : host === "claude.ai" || host.endsWith(".claude.ai")
+        ? ['[data-testid="chat-message"]', '.font-claude-message']
+        : host === "gemini.google.com" || host.endsWith(".gemini.google.com")
+        ? ['message-content .markdown', 'model-response .markdown', '.model-response-text']
+        : [];
       let elements = [];
-      for (const selector of selectors) { elements = [...document.querySelectorAll(selector)].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); if (elements.length) break; }
+      for (const selector of selectors) {
+        elements = [...document.querySelectorAll(selector)].filter(visible);
+        if (elements.length) break;
+      }
+      // Generic fallback remains available for other supported pages, but avoid grabbing the whole page first.
+      if (!elements.length) {
+        for (const selector of ['[data-message-author-role="assistant"]', '[data-testid*="conversation-turn"]', 'main']) {
+          elements = [...document.querySelectorAll(selector)].filter(visible);
+          if (elements.length) break;
+        }
+      }
       const text = elements.map(el => (el.innerText || "").trim()).filter(Boolean).slice(-4).join("\n\n");
-      return text ? { ok: true, text: text.slice(-30000) } : { ok: false, reason: "No readable main content found; this site may need a dedicated adapter." };
+      return text ? { ok: true, text: text.slice(-30000), count: elements.length } : { ok: false, reason: "No assistant response text found. The AI site's interface may have changed." };
     }});
     const value = result?.[0]?.result;
     if (!value?.ok) throw new Error(value?.reason || "No page text captured.");
