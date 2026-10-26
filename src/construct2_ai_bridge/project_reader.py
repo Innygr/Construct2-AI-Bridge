@@ -8,6 +8,7 @@ from typing import Any
 import xml.etree.ElementTree as ET
 
 MAX_XML_BYTES = 32 * 1024 * 1024
+MAX_TOTAL_XML_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 20000
 
 class ProjectReadError(ValueError):
@@ -41,15 +42,20 @@ def load_project(project_path: str | os.PathLike[str]) -> ProjectDocument:
                 members = archive.infolist()
                 if len(members) > MAX_ARCHIVE_MEMBERS:
                     raise ProjectReadError("Project archive contains too many entries.")
+                total_xml_bytes = 0
                 for member in members:
                     name = member.filename.replace("\\", "/")
                     if name.startswith("/") or any(part == ".." for part in name.split("/")):
                         continue
                     if member.is_dir() or not name.lower().endswith((".xml", ".caproj", ".c2proj")) or member.file_size > MAX_XML_BYTES:
                         continue
+                    # Bound aggregate XML memory use, not just each individual entry.
+                    if total_xml_bytes + member.file_size > MAX_TOTAL_XML_BYTES:
+                        continue
                     try:
                         data = archive.read(member)
                         _parse_xml(data, name)
+                        total_xml_bytes += len(data)
                     except (OSError, zipfile.BadZipFile, RuntimeError, ProjectReadError):
                         continue
                     docs.append((name, data))
@@ -105,6 +111,15 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
                 condition_count += 1
             elif tag == "action":
                 action_count += 1
+    diagnostics: list[str] = []
+    if not layouts:
+        diagnostics.append("No layout elements were detected in the readable XML documents.")
+    if not event_sheets:
+        diagnostics.append("No event-sheet elements were detected in the readable XML documents.")
+    if not objects:
+        diagnostics.append("No object types were detected in the readable XML documents.")
+    if not global_variables:
+        diagnostics.append("No global variables were detected; the project may not define any, or this XML layout was not recognized.")
     return {
         "path": document.path, "kind": document.kind,
         "xml_document_count": len(document.xml_documents),
@@ -113,5 +128,6 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
         "objects": sorted(objects.values(), key=lambda item: item["name"].casefold()),
         "families": sorted(families), "global_variables": sorted(global_variables),
         "counts": {"event_like_nodes": event_count, "conditions": condition_count, "actions": action_count},
+        "diagnostics": diagnostics,
         "notes": ["Inspection is best-effort; Construct 2 project XML varies by version.", "No project files were modified."]
     }
