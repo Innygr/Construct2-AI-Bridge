@@ -98,3 +98,37 @@ def test_rejects_excessively_deep_xml(tmp_path: Path) -> None:
     file.write_text(nested, encoding="utf-8")
     with pytest.raises(ProjectReadError, match="nesting exceeds"):
         load_project(file)
+
+
+def test_recognizes_construct2_event_block_nodes(tmp_path: Path) -> None:
+    project = tmp_path / "construct2-event-blocks.xml"
+    project.write_text(
+        '<events><event-block sid="1" name="Start event">'
+        '<conditions><condition id="OnStart" /></conditions>'
+        '<actions><action id="SetValue" /></actions>'
+        '<subevents><event-block sid="2" name="Nested event">'
+        '<conditions><condition id="Compare" /></conditions>'
+        '</event-block></subevents></event-block></events>',
+        encoding="utf-8",
+    )
+    summary = inspect_project(load_project(project))
+    outline = summary["event_outlines"][0]
+    assert outline["event_count"] == 2
+    assert outline["events"][0]["kind"] == "eventblock"
+    assert outline["events"][0]["label"] == "Start event"
+    assert outline["events"][0]["condition_count"] == 1
+    assert outline["events"][0]["action_count"] == 1
+    assert outline["events"][1]["depth"] == 1
+    assert outline["events"][1]["label"] == "Nested event"
+
+
+def test_event_outline_reports_truncation_at_safety_limit(tmp_path: Path) -> None:
+    from construct2_ai_bridge.project_reader import MAX_OUTLINE_EVENTS
+
+    project = tmp_path / "many-events.xml"
+    events = "".join(f'<event name="Event {index}" />' for index in range(MAX_OUTLINE_EVENTS + 1))
+    project.write_text(f"<events>{events}</events>", encoding="utf-8")
+    summary = inspect_project(load_project(project))
+    outline = summary["event_outlines"][0]
+    assert outline["event_count"] == MAX_OUTLINE_EVENTS
+    assert outline["truncated"] is True
