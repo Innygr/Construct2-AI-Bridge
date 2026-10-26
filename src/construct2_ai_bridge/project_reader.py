@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 MAX_XML_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_XML_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 20000
+MAX_OUTLINE_EVENTS = 1000
+EVENT_TAGS = {"event", "block", "foreach", "for", "while", "group"}
 
 class ProjectReadError(ValueError):
     """Raised when a project cannot be safely inspected."""
@@ -83,6 +85,79 @@ def _attr(element: ET.Element, *names: str) -> str | None:
             return value
     return None
 
+def _display_label(element: ET.Element) -> str | None:
+    """Return a short, useful label without assuming a particular C2 XML schema."""
+    for key in ("name", "description", "type", "id"):
+        value = _attr(element, key)
+        if value:
+            return value[:160]
+    return None
+
+def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
+    """Build a bounded, schema-agnostic event outline for inspection and AI context."""
+    events: list[dict[str, Any]] = []
+    truncated = False
+
+    def walk(parent: ET.Element, depth: int) -> None:
+        nonlocal truncated
+        for child in list(parent):
+            tag = _local_name(child.tag)
+            if tag in EVENT_TAGS:
+                if len(events) >= MAX_OUTLINE_EVENTS:
+                    truncated = True
+                    return
+                conditions: list[str] = []
+                actions: list[str] = []
+                nested_events: list[ET.Element] = []
+
+                def collect(node: ET.Element) -> None:
+                    for descendant in list(node):
+                        descendant_tag = _local_name(descendant.tag)
+                        if descendant_tag in EVENT_TAGS:
+                            nested_events.append(descendant)
+                        elif descendant_tag == "condition":
+                            conditions.append(_display_label(descendant) or "condition")
+                        elif descendant_tag == "action":
+                            actions.append(_display_label(descendant) or "action")
+                        else:
+                            collect(descendant)
+
+                collect(child)
+                events.append({
+                    "depth": depth,
+                    "kind": tag,
+                    "label": _display_label(child),
+                    "conditions": conditions[:100],
+                    "actions": actions[:100],
+                    "condition_count": len(conditions),
+                    "action_count": len(actions),
+                    "child_event_count": len(nested_events),
+                })
+                for nested in nested_events:
+                    walk_nested(nested, depth + 1)
+                    if truncated:
+                        return
+            else:
+                walk(child, depth)
+                if truncated:
+                    return
+
+    def walk_nested(event: ET.Element, depth: int) -> None:
+        nonlocal truncated
+        # Reuse the same collector by placing this event beneath a temporary wrapper.
+        wrapper = ET.Element("outline-root")
+        wrapper.append(event)
+        walk(wrapper, depth)
+
+    walk(root, 0)
+    return {
+        "document": document_name,
+        "root_tag": _local_name(root.tag),
+        "event_count": len(events),
+        "events": events,
+        "truncated": truncated,
+    }
+
 def inspect_project(document: ProjectDocument) -> dict[str, Any]:
     layouts: set[str] = set()
     event_sheets: set[str] = set()
@@ -90,8 +165,10 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
     families: set[str] = set()
     global_variables: set[str] = set()
     event_count = condition_count = action_count = 0
+    event_outlines: list[dict[str, Any]] = []
     for label, data in document.xml_documents:
         root = _parse_xml(data, label)
+        event_outlines.append(_event_outline(root, label))
         for element in root.iter():
             tag, name = _local_name(element.tag), _attr(element, "name")
             if name:
@@ -105,7 +182,7 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
                     global_variables.add(name)
                 elif tag in {"objecttype", "object"}:
                     objects[name] = {"name": name, "plugin": _attr(element, "plugin", "type")}
-            if tag in {"event", "block", "foreach", "for", "while", "group"}:
+            if tag in EVENT_TAGS:
                 event_count += 1
             elif tag == "condition":
                 condition_count += 1
@@ -128,6 +205,7 @@ def inspect_project(document: ProjectDocument) -> dict[str, Any]:
         "objects": sorted(objects.values(), key=lambda item: item["name"].casefold()),
         "families": sorted(families), "global_variables": sorted(global_variables),
         "counts": {"event_like_nodes": event_count, "conditions": condition_count, "actions": action_count},
+        "event_outlines": event_outlines,
         "diagnostics": diagnostics,
-        "notes": ["Inspection is best-effort; Construct 2 project XML varies by version.", "No project files were modified."]
+        "notes": ["Inspection is best-effort; Construct 2 project XML varies by version.", "Event outlines are heuristic summaries, not a lossless event-sheet representation.", "No project files were modified."]
     }
