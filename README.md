@@ -54,3 +54,5 @@ MIT. See LICENSE
 Event outlines preserve explicit event disabled/enabled flags when the project XML provides recognizable boolean attributes. Missing or unknown values are not guessed.
 
 Condition/action details retain short inline text when present, alongside attribute-based parameters.
+
+CAPX inspection reports when XML archive entries were skipped because of unsafe paths, malformed content, per-file size limits, or the aggregate XML size limit. A partial summary can still be returned when at least one XML document is readable; check `diagnostics` before treating the summary as complete.
