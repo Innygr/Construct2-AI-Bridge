@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow now runs the Python test suite on pushes and pull requests.
+Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow runs the Python test suite on pushes and pull requests, including API endpoint regression tests.
 
 ## Requirements
 - Python 3.10+
