@@ -83,6 +83,10 @@ def test_home_page_includes_event_outline_view() -> None:
     assert "event.event_id" in response.text
     assert "Inspection note:" in response.text
     assert "DISABLED" in response.text
+    assert "Prepare AI context" in response.text
+    assert "Copy context" in response.text
+    assert "navigator.clipboard.writeText" in response.text
+    assert "Nothing is submitted automatically." in response.text
     assert "Project report (JSON)" in response.text
 
 
