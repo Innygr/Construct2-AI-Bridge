@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -34,13 +35,15 @@ def main() -> int:
     if not inline_scripts:
         raise SystemExit("No inline JavaScript found in inspector page.")
     for index, script in enumerate(inline_scripts, start=1):
-        result = subprocess.run(
-            ["node", "--check"],
-            input=script,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".js") as source:
+            source.write(script)
+            source.flush()
+            result = subprocess.run(
+                ["node", "--check", source.name],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
         if result.returncode:
             print(f"Inline script {index} failed syntax validation:")
             print(result.stderr or result.stdout)
