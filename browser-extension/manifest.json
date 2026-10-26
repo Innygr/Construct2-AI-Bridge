@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Construct 2 AI Bridge — Browser Connector",
-  "version": "0.1.0",
-  "description": "User-controlled connector between the local Construct 2 AI Bridge and an AI page you choose.",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "version": "0.2.0",
+  "description": "User-controlled Construct 2 project context and supervised multi-AI collaboration in selected browser tabs.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*"
+  ],
   "action": {
     "default_title": "Construct 2 AI Bridge",
     "default_popup": "popup.html"
