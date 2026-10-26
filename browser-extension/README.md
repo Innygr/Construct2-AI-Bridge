@@ -1,26 +1,34 @@
 # Browser Connector (experimental)
 
-This extension is the no-API-key path for using an AI website in a browser tab you choose. The AI website itself handles the model session and any account or subscription requirements.
+Use logged-in AI websites in tabs you choose. Each site handles its own model session, login, account limits, and subscription requirements.
 
-## Current workflow
-1. Start the local bridge: `construct2-ai-bridge`.
-2. Open a Construct 2 project in the local bridge so its summary is available.
-3. In Firefox, open `about:debugging#/runtime/this-firefox`.
-4. Choose **Load Temporary Add-on…** and select this folder's `manifest.json`.
-5. Open the AI website you want to use in the active tab.
-6. Open the extension popup and click **Fetch project summary**.
-7. Click **Prepare prompt**, review the generated context, then click **Fill selected tab**.
-8. Check the AI page and submit the prompt yourself.
-9. To review the visible response, reopen the extension popup and click **Capture visible reply**.
+## Firefox and Opera GX
 
-## Browser compatibility
-The initial target is Firefox WebExtensions (Manifest V3). Other browsers may require manifest and API adjustments.
+- **Firefox:** load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
+- **Opera GX:** open the extensions manager, enable developer mode, and load this folder as an unpacked extension. Opera GX is Chromium-based; compatibility is intended but not yet verified. A browser-specific manifest/build may be needed if Opera rejects Firefox-specific metadata or behaves differently.
 
-## Limitations
-- This does not use an API key and does not bypass login, subscriptions, rate limits, or site restrictions.
-- Browser websites change their HTML frequently. Generic input/response detection is best-effort; some sites need a dedicated adapter.
-- It does not automatically click Send, continuously monitor tabs, or apply model output to game files.
-- Only use the connector on a tab you intentionally selected. The prompt is inserted only after clicking the extension button.
+## Multi-AI workflow (manual, user-supervised)
+
+1. Start the local bridge with `construct2-ai-bridge` and open a project.
+2. Load the extension in Firefox and Opera GX.
+3. Open ChatGPT in one browser and Claude in the other, signed in normally.
+4. Fetch the same project summary in each extension and enter the same task.
+5. Choose **Parallel analysis** with different roles (for example, Architect in ChatGPT and Debugger in Claude). Prepare each prompt, fill each active tab, and submit it yourself. Both browsers can generate responses concurrently.
+6. Capture each reply. Paste one AI's reply into the other AI's task field and select **Review** to cross-check it.
+7. Use **Synthesis** with both proposals pasted into the task field to reconcile agreements and disagreements.
+8. Compare the findings and test any approved changes in Construct 2.
+
+## Modes
+- **Parallel analysis:** independent findings and proposals.
+- **Review:** critique another assistant's proposal.
+- **Synthesis:** compare proposals and identify agreements, conflicts, risks, and next steps.
+
+## Limitations and privacy
+
+- No API key is required for this browser workflow, but use each service's normal login and comply with its terms, limits, and controls.
+- This is coordinated manual collaboration, not an unattended multi-agent system. It does not auto-submit prompts, continuously monitor tabs, or modify project files.
+- Browser page layouts change. Generic input/response detection is best-effort and may need site-specific adapters.
+- Project context is inserted only when you click extension controls. Review it before sending it to a third-party AI service.
+- The extension requests active-tab scripting when invoked. Do not use it on a tab you did not intend to share with the AI.
 - The local bridge must be running at `http://127.0.0.1:8765`.
-- Review any captured text. AI responses are untrusted suggestions, not executable commands.
-- This experimental version requests active-tab access only when you invoke it. It does not request blanket access to all websites.
+- AI output is untrusted advice. Verify all suggestions in Construct 2.
