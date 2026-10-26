@@ -106,6 +106,25 @@ def _display_label(element: ET.Element) -> str | None:
             return value[:160]
     return None
 
+def _disabled_state(element: ET.Element) -> bool | None:
+    """Return an explicit disabled state when the XML exposes one."""
+    disabled = _attr(element, "disabled", "isdisabled")
+    if disabled is not None:
+        normalized = disabled.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    enabled = _attr(element, "enabled", "isenabled")
+    if enabled is not None:
+        normalized = enabled.strip().lower()
+        if normalized in {"0", "false", "no", "off"}:
+            return True
+        if normalized in {"1", "true", "yes", "on"}:
+            return False
+    return None
+
+
 def _node_summary(element: ET.Element) -> dict[str, Any]:
     """Extract a compact, schema-agnostic description of a condition or action."""
     details: dict[str, Any] = {"kind": _local_name(element.tag)}
@@ -163,7 +182,7 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                             collect(descendant)
 
                 collect(child)
-                events.append({
+                event_record: dict[str, Any] = {
                     "depth": depth,
                     "kind": tag,
                     "label": _display_label(child),
@@ -174,7 +193,11 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                     "condition_count": len(condition_nodes),
                     "action_count": len(action_nodes),
                     "child_event_count": len(nested_events),
-                })
+                }
+                disabled_state = _disabled_state(child)
+                if disabled_state is not None:
+                    event_record["disabled"] = disabled_state
+                events.append(event_record)
                 for nested in nested_events:
                     walk_nested(nested, depth + 1)
                     if truncated:
