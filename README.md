@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection, XML-based project summaries, and an experimental browser extension for user-supervised AI workflows.
+Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow now runs the Python test suite on pushes and pull requests.
 
 ## Requirements
 - Python 3.10+
@@ -43,7 +43,7 @@ Keep the service local and only use trusted project files.
 - This version does not modify project files or execute project content.
 - XML DTD/entity declarations are rejected.
 - The server binds to loopback only; do not expose it to a network.
-- Construct 2 project formats vary, so inspection is best-effort and must be verified in the editor.
+- Construct 2 project formats vary, so inspection is best-effort. Diagnostics indicate structures the parser did not detect; they are not proof that the project is broken. Verify results in the editor.
 - AI text is untrusted and must be reviewed before use.
 - Independent community project, not affiliated with Scirra.
 
