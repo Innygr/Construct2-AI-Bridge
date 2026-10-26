@@ -6,10 +6,7 @@ async function detectProvider() {
   try {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     const host = new URL(tab?.url || "about:blank").hostname.toLowerCase();
-    let provider = "Other / unsupported site";
-    if (host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com") provider = "ChatGPT";
-    else if (host === "claude.ai" || host.endsWith(".claude.ai")) provider = "Claude";
-    else if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) provider = "Gemini";
+    const provider = globalThis.C2AIBridgeAdapters.detectProvider(host);
     $("provider").value = provider + (tab?.url?.startsWith("http") ? " — " + host : "");
   } catch { $("provider").value = "Could not identify active tab"; }
 }
@@ -58,16 +55,10 @@ $("fill").addEventListener("click", async () => {
   try {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) throw new Error("No active tab found.");
-    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [prompt], func: (text) => {
+    const host = new URL(tab.url || "about:blank").hostname.toLowerCase();
+    const selectors = globalThis.C2AIBridgeAdapters.getComposerSelectors(host);
+    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [prompt, selectors], func: (text, selectors) => {
       const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
-      const host = location.hostname.toLowerCase();
-      const selectors = host.includes("chatgpt.com") || host === "chat.openai.com"
-        ? ['#prompt-textarea', '[data-testid="prompt-textarea"]', 'main form [contenteditable="true"]']
-        : host === "claude.ai" || host.endsWith(".claude.ai")
-        ? ['[contenteditable="true"][data-placeholder]', 'div[contenteditable="true"]', 'fieldset textarea']
-        : host === "gemini.google.com" || host.endsWith(".gemini.google.com")
-        ? ['rich-textarea [contenteditable="true"]', 'div[contenteditable="true"]', 'textarea']
-        : ['textarea:not([disabled])', '[contenteditable="true"]:not([aria-disabled="true"])'];
       let editor = null;
       for (const selector of selectors) {
         editor = [...document.querySelectorAll(selector)].filter(visible).at(-1);
@@ -96,22 +87,16 @@ $("capture").addEventListener("click", async () => {
   try {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) throw new Error("No active tab found.");
-    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
+    const host = new URL(tab.url || "about:blank").hostname.toLowerCase();
+    const selectors = globalThis.C2AIBridgeAdapters.getReplySelectors(host);
+    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [selectors], func: (selectors) => {
       const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
-      const host = location.hostname.toLowerCase();
-      const selectors = host.includes("chatgpt.com") || host === "chat.openai.com"
-        ? ['[data-message-author-role="assistant"]']
-        : host === "claude.ai" || host.endsWith(".claude.ai")
-        ? ['[data-testid="chat-message"]', '.font-claude-message']
-        : host === "gemini.google.com" || host.endsWith(".gemini.google.com")
-        ? ['message-content .markdown', 'model-response .markdown', '.model-response-text']
-        : [];
       let elements = [];
       for (const selector of selectors) {
         elements = [...document.querySelectorAll(selector)].filter(visible);
         if (elements.length) break;
       }
-      // Generic fallback remains available for other supported pages, but avoid grabbing the whole page first.
+      // Generic fallback is deliberately conservative; captured text remains visible for user review.
       if (!elements.length) {
         for (const selector of ['[data-message-author-role="assistant"]', '[data-testid*="conversation-turn"]', 'main']) {
           elements = [...document.querySelectorAll(selector)].filter(visible);
