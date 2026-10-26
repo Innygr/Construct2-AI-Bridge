@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Construct 2 AI Bridge</title><link rel="stylesheet" href="popup.css"></head>
+<body><main>
+  <div class="eyebrow">LOCAL CONNECTOR</div>
+  <h1>Construct 2 <span>AI Bridge</span></h1>
+  <p class="hint">No API key required. This connector works with the AI page you choose, subject to that site's interface and policies.</p>
+  <label for="project">Project summary / context</label>
+  <textarea id="project" rows="5" placeholder="Load a project in the local bridge first, then fetch its summary."></textarea>
+  <div class="row"><button id="fetch">Fetch project summary</button><button id="prepare" class="secondary">Prepare prompt</button></div>
+  <label for="prompt">Prompt for your selected AI tab</label>
+  <textarea id="prompt" rows="5" placeholder="Describe what you want the AI to help with."></textarea>
+  <div class="row"><button id="fill">Fill selected tab</button><button id="capture" class="secondary">Capture visible reply</button></div>
+  <label for="reply">Captured reply / proposed change</label>
+  <textarea id="reply" rows="5" placeholder="Captured text appears here for review."></textarea>
+  <p id="status" role="status">Ready. Open your chosen AI website in the active tab.</p>
+  <p class="foot">User-triggered only. Review all AI output. This early connector does not apply edits to project files.</p>
+</main><script src="popup.js"></script></body></html>
