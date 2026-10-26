@@ -90,3 +90,11 @@ def test_rejects_dtd_after_long_prolog_whitespace(tmp_path: Path) -> None:
     file.write_bytes((b" " * 5000) + b'<!DOCTYPE foo [<!ENTITY x "boom">]><foo>&x;</foo>')
     with pytest.raises(ProjectReadError, match="DTD/entity"):
         load_project(file)
+
+
+def test_rejects_excessively_deep_xml(tmp_path: Path) -> None:
+    file = tmp_path / "deep.caproj"
+    nested = "<node>" * 130 + "</node>" * 130
+    file.write_text(nested, encoding="utf-8")
+    with pytest.raises(ProjectReadError, match="nesting exceeds"):
+        load_project(file)
