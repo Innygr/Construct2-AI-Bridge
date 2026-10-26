@@ -93,6 +93,33 @@ def _display_label(element: ET.Element) -> str | None:
             return value[:160]
     return None
 
+def _node_summary(element: ET.Element) -> dict[str, Any]:
+    """Extract a compact, schema-agnostic description of a condition or action."""
+    details: dict[str, Any] = {"kind": _local_name(element.tag)}
+    for key in ("name", "id", "type", "plugin", "sid"):
+        value = _attr(element, key)
+        if value:
+            details[key] = value[:160]
+    params: list[dict[str, str]] = []
+    for child in element.iter():
+        if child is element or _local_name(child.tag) not in {"param", "parameter"}:
+            continue
+        param: dict[str, str] = {}
+        for key in ("name", "id", "type", "value", "sid"):
+            value = _attr(child, key)
+            if value:
+                param[key] = value[:160]
+        text_value = (child.text or "").strip()
+        if text_value:
+            param["text"] = text_value[:160]
+        if param:
+            params.append(param)
+        if len(params) >= 32:
+            break
+    if params:
+        details["parameters"] = params
+    return details
+
 def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
     """Build a bounded, schema-agnostic event outline for inspection and AI context."""
     events: list[dict[str, Any]] = []
@@ -106,8 +133,8 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                 if len(events) >= MAX_OUTLINE_EVENTS:
                     truncated = True
                     return
-                conditions: list[str] = []
-                actions: list[str] = []
+                condition_nodes: list[ET.Element] = []
+                action_nodes: list[ET.Element] = []
                 nested_events: list[ET.Element] = []
 
                 def collect(node: ET.Element) -> None:
@@ -116,9 +143,9 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                         if descendant_tag in EVENT_TAGS:
                             nested_events.append(descendant)
                         elif descendant_tag == "condition":
-                            conditions.append(_display_label(descendant) or "condition")
+                            condition_nodes.append(descendant)
                         elif descendant_tag == "action":
-                            actions.append(_display_label(descendant) or "action")
+                            action_nodes.append(descendant)
                         else:
                             collect(descendant)
 
@@ -127,10 +154,12 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                     "depth": depth,
                     "kind": tag,
                     "label": _display_label(child),
-                    "conditions": conditions[:100],
-                    "actions": actions[:100],
-                    "condition_count": len(conditions),
-                    "action_count": len(actions),
+                    "conditions": [ _display_label(node) or "condition" for node in condition_nodes[:100] ],
+                    "actions": [ _display_label(node) or "action" for node in action_nodes[:100] ],
+                    "condition_details": [_node_summary(node) for node in condition_nodes[:100]],
+                    "action_details": [_node_summary(node) for node in action_nodes[:100]],
+                    "condition_count": len(condition_nodes),
+                    "action_count": len(action_nodes),
                     "child_event_count": len(nested_events),
                 })
                 for nested in nested_events:
@@ -143,7 +172,6 @@ def _event_outline(root: ET.Element, document_name: str) -> dict[str, Any]:
                     return
 
     def walk_nested(event: ET.Element, depth: int) -> None:
-        nonlocal truncated
         # Reuse the same collector by placing this event beneath a temporary wrapper.
         wrapper = ET.Element("outline-root")
         wrapper.append(event)
