@@ -47,7 +47,8 @@ def events() -> dict[str, Any]:
         "event_sheets": summary["event_sheets"],
         "counts": summary["counts"],
         "event_outlines": summary.get("event_outlines", []),
-        "note": "Event outlines are best-effort XML summaries and may not represent every Construct 2 version's event tree exactly.",
+        "diagnostics": summary.get("diagnostics", []),
+        "note": "Event outlines are best-effort XML summaries and may not represent every Construct 2 version's event tree exactly. Check diagnostics for skipped archive entries or structures the parser did not detect.",
     }
 
 def _require_project() -> dict[str, Any]:
