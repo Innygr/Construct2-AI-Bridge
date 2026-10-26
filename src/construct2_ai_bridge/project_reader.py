@@ -12,7 +12,7 @@ MAX_TOTAL_XML_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 20000
 MAX_OUTLINE_EVENTS = 1000
 MAX_XML_DEPTH = 128
-EVENT_TAGS = {"event", "block", "foreach", "for", "while", "group"}
+EVENT_TAGS = {"event", "eventblock", "block", "foreach", "for", "while", "group"}
 
 class ProjectReadError(ValueError):
     """Raised when a project cannot be safely inspected."""
