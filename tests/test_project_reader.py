@@ -65,11 +65,15 @@ def test_builds_nested_event_outline_with_conditions_and_actions(tmp_path: Path)
     outline = summary["event_outlines"][0]
     assert outline["event_count"] == 2
     assert outline["events"][0]["label"] == "On start"
+    assert outline["events"][0]["event_index"] == 1
+    assert outline["events"][0]["event_id"] == "events.xml::event:0001"
     assert outline["events"][0]["condition_count"] == 1
     assert outline["events"][0]["action_count"] == 1
     assert outline["events"][0]["child_event_count"] == 1
     assert outline["events"][1]["depth"] == 1
     assert outline["events"][1]["label"] == "Nested event"
+    assert outline["events"][1]["event_index"] == 2
+    assert outline["events"][1]["event_id"] == "events.xml::event:0002"
 
 def test_extracts_parameter_attributes_for_conditions_and_actions(tmp_path: Path) -> None:
     project = tmp_path / "parameter-events.xml"
