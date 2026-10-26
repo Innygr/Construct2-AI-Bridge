@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Construct 2 AI Bridge</title><link rel="stylesheet" href="popup.css"></head>
 <body><main><div class="eyebrow">LOCAL CONNECTOR · MULTI-AI</div><h1>Construct 2 <span>AI Bridge</span></h1>
-<p class="hint">Use your logged-in ChatGPT or Claude tab. Prepare different role prompts in each browser and compare their results.</p>
+<p class="hint">Use your normal logged-in AI website tabs. Prepare role-specific prompts, run assistants in parallel, then cross-review their results.</p><label for="provider">Active AI website</label><input id="provider" readonly value="Checking active tab…" aria-live="polite">
 <label for="project">Project summary / context</label><textarea id="project" rows="4" placeholder="Load a project in the local bridge first, then fetch its summary."></textarea><div class="row"><button id="fetch">Fetch project summary</button></div>
 <label for="mode">Collaboration mode</label><select id="mode"><option value="parallel">Parallel analysis — independent opinions</option><option value="review">Review — critique another AI's proposal</option><option value="synthesis">Synthesis — reconcile both responses</option></select>
 <label for="role">This AI's role</label><select id="role"><option value="architect">Architect — design a solution</option><option value="debugger">Debugger — find causes and edge cases</option><option value="reviewer">Reviewer — challenge assumptions</option><option value="implementer">Implementer — give concrete steps</option></select>
