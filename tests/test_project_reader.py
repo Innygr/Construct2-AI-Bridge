@@ -26,3 +26,12 @@ def test_rejects_dtd(tmp_path: Path) -> None:
     file.write_text('<!DOCTYPE foo [<!ENTITY x "boom">]><foo>&x;</foo>')
     with pytest.raises(ProjectReadError, match="DTD/entity"):
         load_project(file)
+
+
+def test_reports_missing_project_structures(tmp_path: Path) -> None:
+    project = tmp_path / "minimal.caproj"
+    project.write_text("<c2project><metadata /></c2project>", encoding="utf-8")
+    summary = inspect_project(load_project(project))
+    assert "diagnostics" in summary
+    assert any("layout" in message.lower() for message in summary["diagnostics"])
+    assert any("object" in message.lower() for message in summary["diagnostics"])
