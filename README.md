@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation and read-only inspection, early development. The initial build includes a local API, browser interface, CAPX ZIP inspection, and XML-based project summaries. It does not yet edit projects or call AI providers.
+Phase A foundation and read-only inspection, early development. The initial build includes a local API, browser interface, CAPX ZIP inspection, and XML-based project summaries. The experimental browser connector is a no-API-key route for using an AI website in a tab you choose.
 
 ## Requirements
 - Python 3.10+
@@ -17,6 +17,9 @@ Phase A foundation and read-only inspection, early development. The initial buil
 
 On Windows PowerShell, activate with .venv\Scripts\Activate.ps1. Then open http://127.0.0.1:8765.
 
+## Browser-based AI (no API key)
+See [browser-extension/README.md](browser-extension/README.md) for the experimental Firefox connector. It lets you fetch local project context, prepare a prompt, insert it into the AI tab you selected, and capture visible response text for review. You still use the AI website's normal login/account and must follow that site's policies. No automatic submission or project-file edits are enabled in this early connector.
+
 ## API
 - GET /api/status — service status.
 - POST /api/project/open — JSON body {"path": "/absolute/path/to/game.capx"}.
@@ -29,7 +32,7 @@ The project path is read on the machine running the bridge. Keep this service lo
 ## Roadmap
 1. A0 — local service, UI, project loading.
 2. A1 — improve project parsing against real projects.
-3. A2 — provider-independent adapters for hosted and local AI.
+3. A2 — provider-independent adapters for hosted and local AI, plus browser-based AI workflow.
 4. A3 — event-sheet explanation and change proposals.
 5. A4 — safe editing with previews, validation, backups, and explicit approval.
 6. A5 — MCP adapter for compatible AI clients.
@@ -41,6 +44,7 @@ The project path is read on the machine running the bridge. Keep this service lo
 - XML DTD/entity declarations are rejected.
 - The server binds to loopback only; do not expose it to a network.
 - Construct 2 project formats vary, so inspection is best-effort and must be verified in the editor.
+- AI text is untrusted and must be reviewed before use.
 - Independent community project, not affiliated with Scirra.
 
 ## License
