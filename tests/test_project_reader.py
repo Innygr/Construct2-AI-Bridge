@@ -35,3 +35,16 @@ def test_reports_missing_project_structures(tmp_path: Path) -> None:
     assert "diagnostics" in summary
     assert any("layout" in message.lower() for message in summary["diagnostics"])
     assert any("object" in message.lower() for message in summary["diagnostics"])
+
+
+def test_ignores_traversal_named_xml_entries(tmp_path: Path) -> None:
+    project = tmp_path / "archive.capx"
+    with zipfile.ZipFile(project, "w") as archive:
+        archive.writestr("../outside.xml", b'<layout name="ShouldNotAppear" />')
+        archive.writestr("project.xml", b'<c2project><layouts><layout name="Safe" /></layouts></c2project>')
+
+    document = load_project(project)
+    summary = inspect_project(document)
+    assert "Safe" in summary["layouts"]
+    assert "ShouldNotAppear" not in summary["layouts"]
+    assert all(".." not in name.split("/") for name in summary["xml_documents"])
