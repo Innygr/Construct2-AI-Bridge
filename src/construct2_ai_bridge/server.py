@@ -43,8 +43,12 @@ def objects() -> dict[str, Any]:
 @app.get("/api/events")
 def events() -> dict[str, Any]:
     summary = _require_project()
-    return {"event_sheets": summary["event_sheets"], "counts": summary["counts"],
-            "note": "Full event-tree parsing is planned for a later inspector iteration."}
+    return {
+        "event_sheets": summary["event_sheets"],
+        "counts": summary["counts"],
+        "event_outlines": summary.get("event_outlines", []),
+        "note": "Event outlines are best-effort XML summaries and may not represent every Construct 2 version's event tree exactly.",
+    }
 
 def _require_project() -> dict[str, Any]:
     if _current_summary is None:
