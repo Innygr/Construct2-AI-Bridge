@@ -85,6 +85,9 @@ def test_home_page_includes_event_outline_view() -> None:
     assert "DISABLED" in response.text
     assert "Prepare AI context" in response.text
     assert "Copy context" in response.text
+    assert "event-context-pick" in response.text
+    assert "Include in AI context" in response.text
+    assert "Select at least one event" in response.text
     assert "navigator.clipboard.writeText" in response.text
     assert "Nothing is submitted automatically." in response.text
     assert "Project report (JSON)" in response.text
