@@ -4,7 +4,7 @@ Use logged-in AI websites in tabs you choose. Each site handles its own model se
 
 ## Supported AI sites and browsers
 
-The initial target AI sites are **ChatGPT**, **Claude**, and **Gemini**. The popup labels the active tab when it recognizes one of these hosts. Host detection is only a convenience; filling prompts and capturing replies still use best-effort generic page selectors, so each site's current interface must be tested.
+The initial target AI sites are **ChatGPT**, **Claude**, and **Gemini**. The popup labels the active tab when it recognizes one of these hosts. ChatGPT and Claude now have separate site-specific connector modules for host matching, composer/reply selectors, and rich-text insertion; Gemini remains on its existing adapter. Website UI changes can still break selectors, so test each site in your browser.
 
 - **Firefox:** supported target; load the extension temporarily from `about:debugging#/runtime/this-firefox`, choosing `manifest.json`.
 - **Opera GX:** intended Chromium-based target; compatibility is not yet verified. Load the unpacked extension through the extensions manager with developer mode enabled.
@@ -46,7 +46,7 @@ Open `edge://extensions`, enable Developer mode, choose **Load unpacked**, and s
 
 - No API key is required for this browser workflow, but use each service's normal login and comply with its terms, limits, and controls.
 - This is coordinated manual collaboration, not an unattended multi-agent system. It does not auto-submit prompts, continuously monitor tabs, or modify project files.
-- Browser page layouts change. Generic input/response detection is best-effort and may need site-specific adapters.
+- Browser page layouts change. ChatGPT and Claude have dedicated adapters, but selector-based input/reply detection remains best-effort and may need updates when either website changes.
 - Project context is inserted only when you click extension controls. Review it before sending it to a third-party AI service.
 - The extension requests active-tab scripting when invoked. Do not use it on a tab you did not intend to share with the AI.
 - The local bridge must be running at `http://127.0.0.1:8765`.
