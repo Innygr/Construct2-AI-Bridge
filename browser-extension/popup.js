@@ -56,25 +56,39 @@ $("fill").addEventListener("click", async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) throw new Error("No active tab found.");
     const host = new URL(tab.url || "about:blank").hostname.toLowerCase();
-    const selectors = globalThis.C2AIBridgeAdapters.getComposerSelectors(host);
-    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [prompt, selectors], func: (text, selectors) => {
+    const connector = globalThis.C2AIBridgeAdapters.getConnector(host);
+    const selectors = connector.composerSelectors;
+    const result = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [prompt, selectors, connector.id], func: (text, selectors, providerId) => {
       const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
       let editor = null;
       for (const selector of selectors) {
-        editor = [...document.querySelectorAll(selector)].filter(visible).at(-1);
+        try { editor = [...document.querySelectorAll(selector)].filter(visible).at(-1); } catch {}
         if (editor) break;
       }
-      if (!editor) return { ok: false, reason: "No supported visible message composer found. The AI site's interface may have changed." };
+      if (!editor) return { ok: false, reason: "No supported visible " + providerId + " message composer found. Open a new or existing chat and try again." };
       editor.focus();
-      if (editor instanceof HTMLTextAreaElement) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) {
+        const proto = editor instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
         setter ? setter.call(editor, text) : editor.value = text;
-        editor.dispatchEvent(new Event("input", { bubbles: true })); editor.dispatchEvent(new Event("change", { bubbles: true }));
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        editor.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
-        editor.replaceChildren(document.createTextNode(text));
+        // ChatGPT and Claude use rich-text editors. Use the browser's text insertion
+        // command first so the site's editor framework receives a normal edit event.
+        let inserted = false;
+        try {
+          editor.focus();
+          document.execCommand("selectAll", false, null);
+          inserted = document.execCommand("insertText", false, text);
+        } catch {}
+        if (!inserted || !(editor.innerText || "").includes(text.slice(0, Math.min(40, text.length)))) {
+          editor.replaceChildren(document.createTextNode(text));
+        }
         editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+        editor.dispatchEvent(new Event("change", { bubbles: true }));
       }
-      return { ok: true, composer: editor.tagName.toLowerCase() };
+      return { ok: true, composer: editor.tagName.toLowerCase(), provider: providerId };
     }});
     const value = result?.[0]?.result;
     if (!value?.ok) throw new Error(value?.reason || "Could not fill the selected tab.");
