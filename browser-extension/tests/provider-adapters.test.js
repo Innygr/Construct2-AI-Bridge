@@ -25,15 +25,19 @@ test("does not classify lookalike or unrelated hosts as supported providers", ()
 });
 
 test("returns provider-specific composer selectors and safe generic fallbacks", () => {
-  assert.deepEqual(adapters.getComposerSelectors("chatgpt.com"), ['#prompt-textarea', '[data-testid="prompt-textarea"]', 'main form [contenteditable="true"]']);
-  assert.deepEqual(adapters.getComposerSelectors("claude.ai"), ['[contenteditable="true"][data-placeholder]', 'div[contenteditable="true"]', 'fieldset textarea']);
+  assert.deepEqual(adapters.getComposerSelectors("chatgpt.com"), ["#prompt-textarea", '[data-testid="prompt-textarea"]', 'form [contenteditable="true"][role="textbox"]', 'main [contenteditable="true"][role="textbox"]']);
+  assert.deepEqual(adapters.getComposerSelectors("claude.ai"), ['[contenteditable="true"][data-placeholder]', 'div[contenteditable="true"][role="textbox"]', 'fieldset [contenteditable="true"]', 'fieldset textarea']);
+  assert.equal(adapters.getConnector("chatgpt.com").id, "chatgpt");
+  assert.equal(adapters.getConnector("claude.ai").id, "claude");
+  assert.equal(adapters.getConnector("chatgpt.com").fillStrategy, "contenteditable");
+  assert.equal(adapters.getConnector("claude.ai").fillStrategy, "contenteditable");
   assert.deepEqual(adapters.getComposerSelectors("gemini.google.com"), ['rich-textarea [contenteditable="true"]', 'div[contenteditable="true"]', 'textarea']);
   assert.deepEqual(adapters.getComposerSelectors("example.org"), ['textarea:not([disabled])', '[contenteditable="true"]:not([aria-disabled="true"])']);
 });
 
 test("returns provider-specific reply selectors and empty generic fallback", () => {
-  assert.deepEqual(adapters.getReplySelectors("chatgpt.com"), ['[data-message-author-role="assistant"]']);
-  assert.deepEqual(adapters.getReplySelectors("claude.ai"), ['[data-testid="chat-message"]', '.font-claude-message']);
+  assert.deepEqual(adapters.getReplySelectors("chatgpt.com"), ['[data-message-author-role="assistant"]', '[data-testid="conversation-turn"] [data-message-author-role="assistant"]']);
+  assert.deepEqual(adapters.getReplySelectors("claude.ai"), ['[data-testid="chat-message"]', '.font-claude-message', '[data-testid*="conversation-turn"]']);
   assert.deepEqual(adapters.getReplySelectors("gemini.google.com"), ['message-content .markdown', 'model-response .markdown', '.model-response-text']);
   assert.deepEqual(adapters.getReplySelectors("example.org"), []);
 });
