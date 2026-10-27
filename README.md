@@ -15,6 +15,8 @@ Phase A foundation and read-only inspection, early development. Includes a local
     python -m pip install -e ".[dev]"
     construct2-ai-bridge
 
+To launch the interface in a separate browser window once the local service is ready, run `construct2-ai-bridge --window`. You can also set a custom local port with `--port 8766`; the interface stays bound to loopback only.
+
 On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open http://127.0.0.1:8765.
 
 ## Browser-based AI without API keys
@@ -37,7 +39,8 @@ Keep the service local and only use trusted project files.
 5. A4 — safe editing with previews, validation, backups, and explicit approval.
 6. A5 — MCP adapter for compatible AI clients.
 7. A6 — tests and documentation using sanitized sample projects.
-8. Phase B, only after A — investigate companion/editor integration and live interaction where technically feasible.
+8. B0 — one-command companion window launch (`construct2-ai-bridge --window`).
+9. B1 — build and validate a Construct 2 SDK plugin that can launch the companion; do not rely on undocumented editor DOM hooks for a docked panel.
 
 ## Safety and limitations
 - This version does not modify project files or execute project content.
@@ -58,5 +61,7 @@ Condition/action details retain short inline text when present, alongside attrib
 CAPX inspection reports when XML archive entries were skipped because of unsafe paths, malformed content, per-file size limits, or the aggregate XML size limit. A partial summary can still be returned when at least one XML document is readable; check `diagnostics` before treating the summary as complete.
 
 Each event outline includes a deterministic `event_id` formed from its XML document name and one-based outline order (for example, `events.xml::event:0001`), plus the numeric `event_index`. These identifiers help AI responses refer to the same event within a given inspected file version; they are not persistent IDs across edits that reorder or insert events.
+
+Construct 2 is officially retired, but its JavaScript SDK supports third-party plugins with editor-time and runtime components. A plugin can add event-system actions/conditions/expressions, but that SDK does not itself provide a supported dockable ChatGPT-style editor panel. The companion window is the first practical integration step; a plugin bridge will be evaluated separately.
 
 The AI context endpoint includes explicit instructions to ground advice in supplied evidence, cite event IDs, acknowledge uncertainty, and propose rather than perform edits. It truncates event details to respect the requested character budget and marks the result as truncated. The browser UI lets you describe a bug, select relevant events, and prepare a combined debugging prompt for manual review and copying; the bug description is clearly labeled as user-provided, and the combined prompt is kept within a 12,000-character budget.
