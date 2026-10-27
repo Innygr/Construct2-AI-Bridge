@@ -21,7 +21,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
-_current_summary: dict[str, Any] | None = None
+_current_summary: dict[str, Any] | None = None\n_current_document = None
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
@@ -48,6 +48,38 @@ def project_summary() -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="No project is open. Use POST /api/project/open first.")
     return _current_summary
 
+
+@app.get("/api/project/xml")
+def selected_sheet_xml(documents: list[str] = Query(..., min_length=1)) -> dict[str, Any]:
+    """Return complete XML text for explicitly selected project XML documents."""
+    _require_project()
+    if _current_document is None:
+        raise HTTPException(status_code=404, detail="No project XML is loaded.")
+    available = dict(_current_document.xml_documents)
+    unknown = sorted(set(documents) - set(available))
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Unknown XML document name(s).", "unknown_documents": unknown},
+        )
+    selected = []
+    for name in documents:
+        data = available[name]
+        try:
+            xml_text = data.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                xml_text = data.decode("utf-16")
+            except UnicodeDecodeError:
+                xml_text = data.decode("utf-8", errors="replace")
+        selected.append({"document": name, "xml": xml_text, "characters": len(xml_text)})
+    return {
+        "documents": selected,
+        "document_count": len(selected),
+        "characters": sum(item["characters"] for item in selected),
+        "complete": True,
+        "note": "Full XML for selected documents; no event outline or character truncation was applied.",
+    }
 
 @app.get("/api/ai-context")
 def ai_context(
