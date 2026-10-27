@@ -9,7 +9,7 @@ client = TestClient(server.app)
 
 def setup_function() -> None:
     # The API stores the active project in module state; isolate each test.
-    server._current_summary = None
+    server._current_summary = None\n    server._current_document = None
 
 
 def test_status_reports_read_only_mode() -> None:
@@ -167,3 +167,27 @@ def test_untrusted_website_origin_is_not_allowed() -> None:
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers
 
+
+
+def test_selected_xml_endpoint_returns_complete_selected_document(tmp_path: Path) -> None:
+    project = tmp_path / "game.caproj"
+    xml = '<c2project><event name="On start"><conditions><condition id="start" /></conditions></event></c2project>'
+    project.write_text(xml, encoding="utf-8")
+    assert client.post("/api/project/open", json={"path": str(project)}).status_code == 200
+
+    response = client.get("/api/project/xml", params=[("documents", "game.caproj")])
+    assert response.status_code == 200
+    body = response.json()
+    assert body["complete"] is True
+    assert body["documents"][0]["xml"] == xml
+    assert body["characters"] == len(xml)
+
+
+def test_selected_xml_endpoint_rejects_unknown_document(tmp_path: Path) -> None:
+    project = tmp_path / "game.caproj"
+    project.write_text("<c2project />", encoding="utf-8")
+    assert client.post("/api/project/open", json={"path": str(project)}).status_code == 200
+
+    response = client.get("/api/project/xml", params=[("documents", "not-in-project.xml")])
+    assert response.status_code == 400
+    assert "Unknown XML document" in response.json()["detail"]["message"]
