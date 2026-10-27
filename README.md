@@ -26,6 +26,7 @@ See [browser-extension/README.md](browser-extension/README.md). The extension ta
 - GET /api/status — service status.
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with stable-in-that-document `event_id` / `event_index` references, nesting depth, condition/action labels, and basic parameter attributes where detectable. The outline parser recognizes normalized `event-block` nodes as well as generic event/group nodes and reports when the outline reaches its safety limit.
+- GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines with `event_id` / `event_index` references and condition/action parameter details where detectable. Outlines are heuristic and may not map every Construct 2 version's event format.\n- GET /api/ai-context — returns a bounded JSON context string designed to paste into an AI chat. Optional repeated `event_ids` parameters focus the context on selected events; `max_chars` accepts 1,000–40,000 characters. Unknown event IDs return HTTP 400. Nothing is sent to an AI provider automatically.
 
