@@ -3,12 +3,24 @@ import json
 from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from . import __version__
 from .project_reader import ProjectReadError, inspect_project, load_project
 
 app = FastAPI(title="Construct 2 AI Bridge", version=__version__)
+
+# Browser extensions have their own origin (moz-extension:// or
+# chrome-extension://). Allow those origins to call this loopback-only API;
+# normal websites are not granted cross-origin access.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(moz-extension|chrome-extension)://[^/]+$",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
 _current_summary: dict[str, Any] | None = None
 
 class OpenProjectRequest(BaseModel):
