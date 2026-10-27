@@ -147,3 +147,23 @@ def test_ai_context_enforces_output_character_limit(tmp_path: Path) -> None:
     body = response.json()
     assert body["characters"] <= 1000
     assert body["truncated"] is True
+
+def test_extension_origin_can_call_local_api() -> None:
+    response = client.get(
+        "/api/status",
+        headers={"Origin": "moz-extension://12345678-1234-1234-1234-123456789abc"},
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "moz-extension://12345678-1234-1234-1234-123456789abc"
+    )
+
+
+def test_untrusted_website_origin_is_not_allowed() -> None:
+    response = client.get(
+        "/api/status",
+        headers={"Origin": "https://example.com"},
+    )
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
