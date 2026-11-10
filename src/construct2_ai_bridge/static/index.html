@@ -58,7 +58,6 @@ document.querySelector('#ollama-use-response').addEventListener('click',()=>{
  if(!candidate.startsWith('<')){xmlStatus.textContent='No XML document found in the AI response. Ask it to return a complete XML document in a fenced xml block.';return;}
  xmlDraft.value=candidate;refreshXmlDiff();xmlStatus.textContent='AI XML proposal loaded into draft. Review it carefully before applying.';
 });
-\n
 let loadedTree=null;
 const patchBox=document.querySelector('#xml-patch'),patchStatus=document.querySelector('#xml-patch-status'),patchApply=document.querySelector('#xml-patch-apply'),treeBox=document.querySelector('#xml-tree');
 document.querySelector('#xml-tree-load').addEventListener('click',async()=>{
