@@ -6,6 +6,7 @@
 <p class="hint">Shared local task board and mailbox. Messages are sent only when you press Post.</p>
 <label for="coordApiBase">Bridge address</label><input id="coordApiBase" type="url" value="http://127.0.0.1:8765" spellcheck="false">
 <div class="row"><label class="agent-label" for="coordAgent">Posting as</label><select id="coordAgent"><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option></select><button id="coordSave" class="secondary">Save</button></div>
+<label for="coordBranch">Git branch used when claiming</label><input id="coordBranch" type="text" value="chatgpt/extension-coordination-ui" spellcheck="false">
 <div class="row"><strong class="subheading">Tasks</strong><button id="coordRefresh" class="secondary compact">Refresh</button></div>
 <div id="coordTasks" class="coord-list"><span class="hint">Connecting to local bridge…</span></div>
 <label for="coordMessageTask">Message topic</label><select id="coordMessageTask"><option value="">General message (no task)</option></select>
