@@ -2,6 +2,189 @@ const api = globalThis.browser ?? globalThis.chrome;
 const $ = (id) => document.getElementById(id);
 const status = (message, bad = false) => { $("status").textContent = message; $("status").style.color = bad ? "#ffaaaa" : "#c9baff"; };
 let loadedSummary = null;
+const DEFAULT_API_BASE = "http://127.0.0.1:8765";
+let apiBase = DEFAULT_API_BASE;
+let coordinationPoll = null;
+let lastMessageId = 0;
+let coordinationBusy = false;
+
+function normalizeApiBase(value) {
+  const parsed = new URL(String(value || "").trim());
+  if (parsed.protocol !== "http:" ||
+      !["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname) ||
+      parsed.username || parsed.password || parsed.search || parsed.hash ||
+      (parsed.pathname !== "/" && parsed.pathname !== "")) {
+    throw new Error("Use a loopback HTTP address only (127.0.0.1, localhost, or [::1]).");
+  }
+  return parsed.origin;
+}
+
+function apiUrl(path) { return apiBase + path; }
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+    throw new Error(detail || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+function selectedAgent() { return $("coordAgent").value; }
+function coordinationStatus(message, bad = false) {
+  $("coordStatus").textContent = message;
+  $("coordStatus").classList.toggle("error", bad);
+}
+
+async function loadCoordination() {
+  if (coordinationBusy) return;
+  coordinationBusy = true;
+  try {
+    const [taskData, messageData] = await Promise.all([
+      apiRequest("/api/coordination/tasks"),
+      apiRequest("/api/coordination/messages?after_id=" + lastMessageId + "&limit=100")
+    ]);
+    renderCoordinationTasks(taskData.tasks || []);
+    appendCoordinationMessages(messageData.messages || []);
+    coordinationStatus("Connected · " + (taskData.tasks || []).length + " task(s)");
+  } catch (error) {
+    coordinationStatus("Bridge unavailable: " + error.message, true);
+  } finally {
+    coordinationBusy = false;
+  }
+}
+
+function renderCoordinationTasks(tasks) {
+  const list = $("coordTasks");
+  const taskSelect = $("coordMessageTask");
+  list.replaceChildren();
+  const previousTask = taskSelect.value;
+  taskSelect.replaceChildren(new Option("General message (no task)", ""));
+  for (const task of tasks) {
+    const option = new Option(task.id + " · " + task.title, task.id);
+    taskSelect.append(option);
+    const card = document.createElement("article");
+    card.className = "coord-task";
+    const heading = document.createElement("div");
+    heading.className = "coord-task-heading";
+    const title = document.createElement("strong");
+    title.textContent = task.title || task.id;
+    const state = document.createElement("span");
+    state.className = "coord-state";
+    state.textContent = task.status || "unknown";
+    heading.append(title, state);
+    const detail = document.createElement("p");
+    detail.textContent = task.description || "No description provided.";
+    const meta = document.createElement("small");
+    meta.textContent = task.id + " · " + (task.owner ? "Owned by " + task.owner : "Unclaimed") +
+      (task.branch ? " · " + task.branch : "");
+    card.append(heading, detail, meta);
+    if (task.status === "open" || (task.status === "claimed" && task.owner === selectedAgent())) {
+      const claim = document.createElement("button");
+      claim.type = "button";
+      claim.className = "secondary";
+      claim.textContent = task.owner === selectedAgent() ? "Claimed by you" : "Claim task";
+      claim.disabled = task.owner === selectedAgent();
+      claim.addEventListener("click", () => claimCoordinationTask(task.id));
+      card.append(claim);
+    }
+    list.append(card);
+  }
+  if ([...taskSelect.options].some(option => option.value === previousTask)) taskSelect.value = previousTask;
+  if (!tasks.length) list.textContent = "No tasks have been created yet.";
+}
+
+function appendCoordinationMessages(messages) {
+  const list = $("coordMessages");
+  for (const message of messages) {
+    const item = document.createElement("article");
+    item.className = "coord-message";
+    const meta = document.createElement("small");
+    meta.textContent = "#" + message.id + " · " + message.agent +
+      (message.task_id ? " · " + message.task_id : "");
+    const body = document.createElement("p");
+    body.textContent = message.body || "";
+    item.append(meta, body);
+    list.append(item);
+    lastMessageId = Math.max(lastMessageId, Number(message.id) || 0);
+  }
+  while (list.children.length > 60) list.firstElementChild.remove();
+  if (!list.children.length) list.textContent = "No coordination messages yet.";
+}
+
+async function claimCoordinationTask(taskId) {
+  const agent = selectedAgent();
+  const branch = "chatgpt/extension-coordination-ui";
+  try {
+    await apiRequest("/api/coordination/tasks/" + encodeURIComponent(taskId) + "/claim", {
+      method: "POST",
+      body: JSON.stringify({ agent, branch })
+    });
+    coordinationStatus("Claimed " + taskId + " as " + agent + ".");
+    await loadCoordination();
+  } catch (error) { coordinationStatus("Could not claim task: " + error.message, true); }
+}
+
+async function postCoordinationMessage() {
+  const body = $("coordMessage").value.trim();
+  if (!body) return coordinationStatus("Write a message first.", true);
+  try {
+    const payload = { agent: selectedAgent(), body };
+    const taskId = $("coordMessageTask").value;
+    if (taskId) payload.task_id = taskId;
+    const result = await apiRequest("/api/coordination/messages", {
+      method: "POST", body: JSON.stringify(payload)
+    });
+    $("coordMessage").value = "";
+    if (result.message) appendCoordinationMessages([result.message]);
+    coordinationStatus("Message posted as " + selectedAgent() + ".");
+  } catch (error) { coordinationStatus("Could not post message: " + error.message, true); }
+}
+
+async function initializeCoordination() {
+  try {
+    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent"]);
+    apiBase = normalizeApiBase(saved.coordinationApiBase || DEFAULT_API_BASE);
+    $("coordApiBase").value = apiBase;
+    $("coordAgent").value = saved.coordinationAgent || "chatgpt";
+  } catch (error) {
+    apiBase = DEFAULT_API_BASE;
+    $("coordApiBase").value = DEFAULT_API_BASE;
+    coordinationStatus(error.message, true);
+  }
+  $("coordSave").addEventListener("click", async () => {
+    try {
+      const nextBase = normalizeApiBase($("coordApiBase").value);
+      const agent = selectedAgent();
+      await api.storage.local.set({ coordinationApiBase: nextBase, coordinationAgent: agent });
+      apiBase = nextBase;
+      lastMessageId = 0;
+      $("coordMessages").replaceChildren();
+      coordinationStatus("Settings saved.");
+      await loadCoordination();
+    } catch (error) { coordinationStatus("Invalid settings: " + error.message, true); }
+  });
+  $("coordAgent").addEventListener("change", async () => {
+    await api.storage.local.set({ coordinationAgent: selectedAgent() });
+    await loadCoordination();
+  });
+  $("coordRefresh").addEventListener("click", loadCoordination);
+  $("coordPost").addEventListener("click", postCoordinationMessage);
+  $("coordMessage").addEventListener("keydown", event => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) postCoordinationMessage();
+  });
+  await loadCoordination();
+  coordinationPoll = setInterval(loadCoordination, 12000);
+}
+
+window.addEventListener("pagehide", () => {
+  if (coordinationPoll !== null) clearInterval(coordinationPoll);
+});
 
 async function detectProvider() {
   try {
@@ -12,6 +195,7 @@ async function detectProvider() {
   } catch { $("provider").value = "Could not identify active tab"; }
 }
 detectProvider();
+initializeCoordination();
 
 function renderEventSheets(summary) {
   const container = $("sheets");
@@ -41,7 +225,7 @@ function renderEventSheets(summary) {
 $("fetch").addEventListener("click", async () => {
   status("Loading project summary…");
   try {
-    const response = await fetch("http://127.0.0.1:8765/api/project/summary");
+    const response = await fetch(apiUrl("/api/project/summary"));
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "No project summary available");
     loadedSummary = data;
@@ -76,7 +260,7 @@ $("prepare").addEventListener("click", async () => {
   try {
     const query = new URLSearchParams();
     selectedNames.forEach(name => query.append("documents", name));
-    const response = await fetch("http://127.0.0.1:8765/api/project/xml?" + query.toString());
+    const response = await fetch(apiUrl("/api/project/xml?") + query.toString());
     const xmlData = await response.json();
     if (!response.ok) throw new Error(xmlData.detail?.message || xmlData.detail || "Could not fetch selected XML.");
     if (!xmlData.complete || !Array.isArray(xmlData.documents)) throw new Error("The bridge did not return complete XML.");
