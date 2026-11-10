@@ -43,7 +43,7 @@ class WriteXmlRequest(BaseModel):
 
 class OllamaChatRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
-    prompt: str = Field(min_length=1, max_length=200000)
+    prompt: str = Field(min_length=1, max_length=2_000_000)
     system: str = Field(default="You are a careful Construct 2 debugging assistant. Ground claims in supplied project evidence, distinguish observations from hypotheses, and suggest changes only.", max_length=8000)
 
 
@@ -147,6 +147,10 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
     if current_hash != request.expected_project_sha256:
         raise HTTPException(status_code=409, detail="Project changed on disk since it was loaded. Reload it before applying edits.")
     backup_path = project_path.with_name(project_path.name + ".bak")
+    suffix = 1
+    while backup_path.exists():
+        backup_path = project_path.with_name(project_path.name + f".bak.{suffix}")
+        suffix += 1
     temp_path = None
     try:
         fd, temp_name = tempfile.mkstemp(prefix=f".{project_path.stem}.", suffix=project_path.suffix, dir=project_path.parent)
@@ -171,6 +175,7 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
         if _file_sha256(project_path) != request.expected_project_sha256:
             raise HTTPException(status_code=409, detail="Project changed while the edit was being prepared. No changes were applied.")
         shutil.copy2(project_path, backup_path)
+        shutil.copystat(project_path, temp_path)
         os.replace(temp_path, project_path)
         temp_path = None
         _current_document = validated
