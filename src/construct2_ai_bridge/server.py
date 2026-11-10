@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from . import __version__
 from .project_reader import MAX_XML_BYTES, ProjectReadError, _parse_xml, inspect_project, load_project
+from .coordination import CoordinationError, CoordinationStore
 
 app = FastAPI(title="Construct 2 AI Bridge", version=__version__)
 
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 _current_summary: dict[str, Any] | None = None
 _current_document = None
+_coordination = CoordinationStore()
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
@@ -113,6 +115,117 @@ def ollama_chat(request: OllamaChatRequest) -> dict[str, Any]:
         "prompt_eval_count": result.get("prompt_eval_count"),
         "eval_count": result.get("eval_count"),
     }
+
+
+
+class CoordinationTaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=12000)
+    created_by: str = Field(min_length=1, max_length=80)
+
+
+class CoordinationTaskClaim(BaseModel):
+    agent: str = Field(min_length=1, max_length=80)
+    branch: str | None = Field(default=None, max_length=200)
+
+
+class CoordinationTaskUpdate(BaseModel):
+    agent: str = Field(min_length=1, max_length=80)
+    status: str = Field(pattern=r"^(open|claimed|in_review|done|blocked)$")
+    branch: str | None = Field(default=None, max_length=200)
+
+
+class CoordinationMessageCreate(BaseModel):
+    agent: str = Field(min_length=1, max_length=80)
+    body: str = Field(min_length=1, max_length=12000)
+    task_id: str | None = Field(default=None, max_length=40)
+
+
+class CoordinationLockCreate(BaseModel):
+    path: str = Field(min_length=1, max_length=1024)
+    agent: str = Field(min_length=1, max_length=80)
+    task_id: str | None = Field(default=None, max_length=40)
+    ttl_seconds: int = Field(default=900, ge=30, le=86400)
+
+
+class CoordinationLockRelease(BaseModel):
+    path: str = Field(min_length=1, max_length=1024)
+    agent: str = Field(min_length=1, max_length=80)
+    token: str = Field(min_length=1, max_length=64)
+
+
+def _coordination_call(callback, *args, **kwargs):
+    try:
+        return callback(*args, **kwargs)
+    except CoordinationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+def _validate_lock_path(path: str) -> str:
+    from pathlib import PurePosixPath
+    normalized = path.replace("\\\\", "/")
+    parsed = PurePosixPath(normalized)
+    if parsed.is_absolute() or not parsed.parts or any(part in ("", ".", "..") for part in parsed.parts):
+        raise HTTPException(status_code=400, detail="Lock paths must be safe project-relative paths.")
+    return parsed.as_posix()
+
+
+@app.get("/api/coordination/status")
+def coordination_status() -> dict[str, Any]:
+    return {"available": True, "storage": "sqlite", "agent_protocol": "poll-and-publish", "agents_are_autonomous": False}
+
+
+@app.get("/api/coordination/tasks")
+def coordination_tasks(status: str | None = Query(default=None, pattern=r"^(open|claimed|in_review|done|blocked)$")) -> dict[str, Any]:
+    return {"tasks": _coordination.list_tasks(status)}
+
+
+@app.post("/api/coordination/tasks")
+def coordination_create_task(request: CoordinationTaskCreate) -> dict[str, Any]:
+    return {"task": _coordination.create_task(request.title, request.description, request.created_by)}
+
+
+@app.post("/api/coordination/tasks/{task_id}/claim")
+def coordination_claim_task(task_id: str, request: CoordinationTaskClaim) -> dict[str, Any]:
+    return {"task": _coordination_call(_coordination.claim_task, task_id, request.agent, request.branch)}
+
+
+@app.patch("/api/coordination/tasks/{task_id}")
+def coordination_update_task(task_id: str, request: CoordinationTaskUpdate) -> dict[str, Any]:
+    return {"task": _coordination_call(_coordination.update_task, task_id, request.agent, request.status, request.branch)}
+
+
+@app.get("/api/coordination/messages")
+def coordination_messages(
+    task_id: str | None = Query(default=None, max_length=40),
+    after_id: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    return {"messages": _coordination.list_messages(task_id, after_id, limit)}
+
+
+@app.post("/api/coordination/messages")
+def coordination_post_message(request: CoordinationMessageCreate) -> dict[str, Any]:
+    return {"message": _coordination_call(_coordination.post_message, request.agent, request.body, request.task_id)}
+
+
+@app.get("/api/coordination/locks")
+def coordination_locks() -> dict[str, Any]:
+    return {"locks": _coordination.list_locks()}
+
+
+@app.post("/api/coordination/locks")
+def coordination_acquire_lock(request: CoordinationLockCreate) -> dict[str, Any]:
+    path = _validate_lock_path(request.path)
+    return {"lock": _coordination_call(_coordination.acquire_lock, path, request.agent, request.task_id, request.ttl_seconds)}
+
+
+@app.delete("/api/coordination/locks")
+def coordination_release_lock(request: CoordinationLockRelease) -> dict[str, bool]:
+    path = _validate_lock_path(request.path)
+    _coordination_call(_coordination.release_lock, path, request.agent, request.token)
+    return {"released": True}
+
 
 @app.get("/api/status")
 def status() -> dict[str, str]:
