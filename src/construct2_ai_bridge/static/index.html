@@ -22,7 +22,19 @@ document.querySelector('#open-form').addEventListener('submit',async e=>{e.preve
 
 
 const xmlSelect=document.querySelector('#xml-document'),xmlDraft=document.querySelector('#xml-draft'),xmlStatus=document.querySelector('#xml-status'),xmlDiff=document.querySelector('#xml-diff'),xmlApply=document.querySelector('#xml-apply');
-function refreshXmlDiff(){const current=xmlDraft.value;const changed=current!==loadedXml;xmlDiff.textContent=changed?'Draft differs from the loaded document. Original: '+loadedXml.length+' chars · Draft: '+current.length+' chars. Review the complete XML before applying.':'No changes to preview.';xmlApply.disabled=!changed||!loadedXmlDocument||!projectSha256;}
+function refreshXmlDiff(){
+ const current=xmlDraft.value,changed=current!==loadedXml;
+ if(!changed){xmlDiff.textContent='No changes to preview.';xmlApply.disabled=true;return;}
+ const before=loadedXml.split('\\n'),after=current.split('\\n');
+ let prefix=0;while(prefix<before.length&&prefix<after.length&&before[prefix]===after[prefix])prefix++;
+ let suffix=0;while(suffix<before.length-prefix&&suffix<after.length-prefix&&before[before.length-1-suffix]===after[after.length-1-suffix])suffix++;
+ const removed=before.slice(prefix,before.length-suffix),added=after.slice(prefix,after.length-suffix);
+ const preview=['--- '+loadedXmlDocument,'+++ proposed version','@@ changed lines '+(prefix+1)+' @@',...removed.map(line=>'- '+line),...added.map(line=>'+ '+line)];
+ if(prefix)preview.splice(3,0,'… '+prefix+' unchanged line(s) above …');
+ if(suffix)preview.push('… '+suffix+' unchanged line(s) below …');
+ xmlDiff.textContent=preview.join('\\n')+'\\n\\nThis compact preview shows the changed region; inspect the full XML before applying.';
+ xmlApply.disabled=!loadedXmlDocument||!projectSha256;
+}
 document.querySelector('#xml-load').addEventListener('click',async()=>{
  const name=xmlSelect.value;if(!name){xmlStatus.textContent='Open a project and choose a document first.';return;}
  xmlStatus.textContent='Reading full XML…';
