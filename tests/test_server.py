@@ -191,3 +191,30 @@ def test_selected_xml_endpoint_rejects_unknown_document(tmp_path: Path) -> None:
     response = client.get("/api/project/xml", params=[("documents", "not-in-project.xml")])
     assert response.status_code == 400
     assert "Unknown XML document" in response.json()["detail"]["message"]
+
+
+def test_ollama_status_handles_service_not_running(monkeypatch) -> None:
+    import urllib.error
+
+    def unavailable(*args, **kwargs):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(server.urllib.request, "urlopen", unavailable)
+    response = client.get("/api/ollama/status")
+    assert response.status_code == 200
+    assert response.json()["available"] is False
+    assert response.json()["models"] == []
+
+
+def test_ollama_chat_validates_prompt() -> None:
+    response = client.post("/api/ollama/chat", json={"model": "qwen2.5:7b", "prompt": ""})
+    assert response.status_code == 422
+
+
+def test_ollama_controls_are_present_in_home_page() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="ollama-model"' in response.text
+    assert 'id="ollama-refresh"' in response.text
+    assert 'id="ollama-run"' in response.text
+    assert "/api/ollama/chat" in response.text
