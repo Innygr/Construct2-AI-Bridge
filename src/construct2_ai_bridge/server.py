@@ -234,7 +234,7 @@ def _xml_tree(root: ET.Element, max_nodes: int = 1000) -> dict[str, Any]:
             raise ValueError(f"XML tree exceeds the {max_nodes}-node display limit.")
         result: dict[str, Any] = {
             "path": path,
-            "tag": node.tag,
+            "tag": node.tag if isinstance(node.tag, str) else ("#comment" if node.tag is ET.Comment else "#processing-instruction"),
             "attributes": dict(node.attrib),
             "text": (node.text or "").strip()[:500],
             "children": [],
@@ -275,9 +275,14 @@ def patch_project_xml(request: PatchXmlRequest) -> dict[str, Any]:
     if request.document not in available:
         raise HTTPException(status_code=400, detail=f"Unknown XML document: {request.document}")
     try:
-        root = _parse_xml(available[request.document], request.document)
+        source_bytes = available[request.document]
+        _parse_xml(source_bytes, request.document)  # Apply the same DTD, size, and depth checks as normal project reads.
+        parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True, insert_pis=True))
+        root = ET.fromstring(source_bytes, parser=parser)
         for operation in request.operations:
             node = _get_xml_node(root, operation.path)
+            if not isinstance(node.tag, str):
+                raise ValueError("XML comments and processing instructions cannot be edited as elements.")
             if operation.op == "set_attribute":
                 if not operation.name or operation.value is None:
                     raise ValueError("set_attribute requires name and value.")
