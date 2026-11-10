@@ -39,6 +39,7 @@ class OpenProjectRequest(BaseModel):
 
 
 class WriteXmlRequest(BaseModel):
+    agent: str = Field(default="local", min_length=1, max_length=80)
     document: str = Field(min_length=1, max_length=4096)
     xml: str = Field(min_length=1, max_length=32 * 1024 * 1024)
     expected_project_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
@@ -53,6 +54,7 @@ class XmlOperation(BaseModel):
 
 
 class PatchXmlRequest(BaseModel):
+    agent: str = Field(default="local", min_length=1, max_length=80)
     document: str = Field(min_length=1, max_length=4096)
     expected_project_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     operations: list[XmlOperation] = Field(min_length=1, max_length=100)
@@ -161,9 +163,18 @@ def _coordination_call(callback, *args, **kwargs):
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
+def _assert_project_write_unlocked(document: str, project_path: Path, agent: str) -> None:
+    active = _coordination.list_locks()
+    protected = {document, project_path.name}
+    conflicts = [lock for lock in active if lock["path"] in protected and lock["agent"] != agent]
+    if conflicts:
+        owner = conflicts[0]["agent"]
+        raise HTTPException(status_code=409, detail=f"Project file is locked by {owner}; wait for the lock to expire or be released.")
+
+
 def _validate_lock_path(path: str) -> str:
     from pathlib import PurePosixPath
-    normalized = path.replace("\\\\", "/")
+    normalized = path.replace("\\", "/")
     parsed = PurePosixPath(normalized)
     if parsed.is_absolute() or not parsed.parts or any(part in ("", ".", "..") for part in parsed.parts):
         raise HTTPException(status_code=400, detail="Lock paths must be safe project-relative paths.")
@@ -261,6 +272,7 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
     if _current_document is None:
         raise HTTPException(status_code=404, detail="No project XML is loaded.")
     project_path = Path(_current_document.path)
+    _assert_project_write_unlocked(request.document, project_path, request.agent)
     if len(request.xml.encode("utf-8")) > MAX_XML_BYTES:
         raise HTTPException(status_code=413, detail="Updated XML exceeds the per-document size limit.")
     try:
@@ -420,6 +432,7 @@ def patch_project_xml(request: PatchXmlRequest) -> dict[str, Any]:
                 parent.remove(node)
         candidate = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
         write_result = write_project_xml(WriteXmlRequest(
+            agent=request.agent,
             document=request.document,
             xml=candidate,
             expected_project_sha256=request.expected_project_sha256,
