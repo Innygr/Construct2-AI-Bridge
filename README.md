@@ -38,11 +38,36 @@ Install Ollama separately and pull at least one model (for example, `ollama pull
 - No prompt is sent to Ollama until you click **Run with Ollama**. Review project context before submitting it.
 - API endpoints: `GET /api/ollama/status` and `POST /api/ollama/chat`.
 
+## Multi-agent coordination (preview)
+
+The local coordination service gives multiple AI clients a shared task board, message relay, and expiring file locks. It stores state in SQLite at `~/.construct2-ai-bridge/coordination.sqlite3` by default; set `C2AI_COORDINATION_DB` before launching the bridge to choose another location.
+
+This is a coordination mailbox, not an autonomous agent network: Claude and ChatGPT do not gain access to each other's private conversations or run continuously in the background. Each client must explicitly poll the API and publish its updates. The browser UI provides a basic shared task board and message feed.
+
+- Create/list tasks; claim tasks with an agent identity and optional branch.
+- Update task status (`open`, `claimed`, `in_review`, `done`, `blocked`).
+- Post and retrieve shared messages.
+- Acquire/release project-relative file locks. Locks expire automatically; release requires the returned token.
+- Task ownership prevents another agent from claiming an active task. File locks prevent another agent from acquiring the same path while the lock is live.
+
+Suggested workflow: create a task, assign one agent, have that agent work on its own Git branch, lock files before editing, publish a proposal, then have the other agent review and merge. The coordination API does not itself create branches, merge code, or grant agents repository credentials. File locks are advisory coordination controls, not authentication: any local process able to reach the loopback API can claim an agent label. Keep the service bound to loopback and only use it on a trusted computer. Project XML write requests now respect active locks on the selected document or project filename; include the matching `agent` label to write while holding your own lock.
+
+## Coordination API
+
+- GET /api/coordination/status
+- GET/POST /api/coordination/tasks
+- POST /api/coordination/tasks/{task_id}/claim
+- PATCH /api/coordination/tasks/{task_id}
+- GET/POST /api/coordination/messages
+- GET/POST/DELETE /api/coordination/locks
+
+Example task creation body: `{"title":"Improve event parsing","description":"Add condition parameter coverage","created_by":"chatgpt"}`. Example lock body: `{"path":"src/construct2_ai_bridge/project_reader.py","agent":"claude","task_id":"C2-...","ttl_seconds":900}`. Keep the returned lock token private to the agent that acquired it.
+
 ## API
 - GET /api/status — service status (reports read/write-with-approval mode).
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with stable-in-that-document `event_id` / `event_index` references, nesting depth, condition/action labels, and basic parameter attributes where detectable. The outline parser recognizes normalized `event-block` nodes as well as generic event/group nodes and reports when the outline reaches its safety limit.
-- GET /api/project/tree?document=events.xml — returns a bounded XML node tree (up to 1,000 nodes and 64 levels) with child-index paths for structural patch proposals.\n- POST /api/project/patch — applies 1–100 reviewed path-based XML operations (`set_attribute`, `remove_attribute`, `set_text`, `append_xml`, `delete_node`) using the same stale-hash check, backup, validation, and atomic replacement as normal writes. The root cannot be deleted.\n- POST /api/project/write — applies one explicitly approved XML document update. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.
+- GET /api/project/tree?document=events.xml — returns a bounded XML node tree (up to 1,000 nodes and 64 levels) with child-index paths for structural patch proposals.\n- POST /api/project/patch — applies 1–100 reviewed path-based XML operations (`set_attribute`, `remove_attribute`, `set_text`, `append_xml`, `delete_node`) using the same stale-hash check, backup, validation, and atomic replacement as normal writes. The root cannot be deleted.\n- POST /api/project/write — applies one explicitly approved XML document update; optional `agent` defaults to `local` and is checked against active file locks. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.
 - GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines with `event_id` / `event_index` references and condition/action parameter details where detectable. Outlines are heuristic and may not map every Construct 2 version's event format.
