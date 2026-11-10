@@ -37,6 +37,10 @@ Open `edge://extensions`, enable Developer mode, choose **Load unpacked**, and s
 7. Use **Synthesis** with both proposals pasted into the task field to reconcile agreements and disagreements.
 8. Compare the findings and test any approved changes in Construct 2.
 
+## Agent coordination panel
+
+The popup also provides a shared local task board and message feed. It can list open and claimed tasks, claim a task against a configurable Git branch, and post explicitly entered handoff messages. The bridge address, agent label, and branch are saved in extension-local storage. Polling runs only while the popup is open. See [the coordination panel guide](../docs/EXTENSION_COORDINATION.md) for API behavior, safety boundaries, and a manual smoke-test checklist.
+
 ## Modes
 - **Parallel analysis:** independent findings and proposals.
 - **Review:** critique another assistant's proposal.
