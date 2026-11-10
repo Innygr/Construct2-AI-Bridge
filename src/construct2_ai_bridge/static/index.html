@@ -5,6 +5,7 @@
 </style></head><body><main class="wrap"><div class="eyebrow">Local developer tool · Phase A0/A1</div><h1>Construct 2 <span style="color:#b49aff">AI Bridge</span></h1><p>Inspect, review, and safely edit Construct 2 project XML locally. Writes require explicit approval and create a backup.</p>
 <div class="grid"><section class="card"><span class="pill">Provider-independent</span><h2>Local first</h2><p class="small">No AI key required for inspection. Provider adapters come later.</p></section><section class="card"><span class="pill">Read + write</span><h2>Project editor</h2><p class="small">Read project XML, prepare AI-assisted edits, review them, and explicitly apply approved changes.</p></section></div>
 <section class="card"><h2>Open project</h2><p class="small">Enter the full path to a local .capx, .caproj, or XML file on the computer running the bridge.</p><form id="open-form"><label for="project-path">Project file path</label><input id="project-path" name="path" placeholder="/home/you/Games/MyGame.capx" required><button type="submit">Inspect project</button></form><p id="message" role="status" class="status">Checking bridge…</p></section>
+<section class="card" id="coordination-card"><span class="pill">Shared coordination · preview</span><h2>AI Dev Coordination</h2><p class="small">A shared local task board and message relay for connected AI clients. Agents must explicitly poll and publish; this page does not make Claude or ChatGPT communicate autonomously.</p><div class="grid"><div><label for="coord-agent">Acting as</label><select id="coord-agent" style="width:100%;background:#090d17;border:1px solid #4a4865;color:#fff;border-radius:8px;padding:12px;font:inherit"><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option><option value="local">Local / human</option></select></div><div><label>Coordination service</label><p id="coord-status" class="status">Checking…</p><button id="coord-refresh" type="button">Refresh shared board</button></div></div><form id="coord-task-form"><label for="coord-title">New task</label><input id="coord-title" maxlength="200" placeholder="e.g. Improve Construct 2 condition parsing" required><label for="coord-description" style="margin-top:10px">Task details</label><textarea id="coord-description" rows="2" maxlength="12000" placeholder="Scope, files, acceptance criteria…"></textarea><button type="submit">Create shared task</button></form><div id="coord-tasks" aria-live="polite"><p class="small">No tasks loaded.</p></div><h3>Shared messages</h3><div id="coord-messages" aria-live="polite"><p class="small">No messages loaded.</p></div><form id="coord-message-form"><label for="coord-message">Post a message</label><textarea id="coord-message" rows="2" maxlength="12000" placeholder="Share a finding, handoff, or question…"></textarea><button type="submit">Publish message</button></form></section>
 <section class="card"><h2>Event outline</h2><p class="small">Heuristic event-sheet view. Review the original project in Construct 2 before relying on any interpretation.</p><div id="event-outline" aria-live="polite"><p class="small">Open a project to view detected events.</p></div></section><section class="card"><h2>AI context</h2><p class="small">Describe the bug and select relevant events. Context is prepared locally for manual review and copying. Nothing is submitted automatically.</p><label for="bug-description">What is going wrong?</label><textarea id="bug-description" rows="4" maxlength="3000" placeholder="What happened, what you expected, and steps to reproduce…"></textarea><button id="prepare-context" type="button">Prepare debugging context</button> <button id="copy-context" type="button" disabled>Copy context</button><p id="context-status" class="small" role="status">Open a project first.</p><pre id="context-output">No AI context prepared yet.</pre></section>
 <section class="card" id="ollama-card"><span class="pill">Local inference</span><h2>Ollama</h2><p class="small">Run a model on this computer through Ollama. Install and start Ollama separately, then refresh the model list. Nothing is sent until you click Run with Ollama.</p><div class="grid"><div><label for="ollama-model">Installed model</label><select id="ollama-model" style="width:100%;background:#090d17;border:1px solid #4a4865;color:#fff;border-radius:8px;padding:12px;font:inherit"><option value="">Check Ollama first</option></select></div><div><label>Connection</label><p id="ollama-status" class="status">Not checked yet.</p><button id="ollama-refresh" type="button">Check Ollama / refresh models</button></div></div><label for="ollama-system">System instructions</label><textarea id="ollama-system" rows="2">You are a careful Construct 2 debugging assistant. Ground claims in supplied project evidence, distinguish observations from hypotheses, and suggest changes only.</textarea><button id="ollama-run" type="button">Ask Ollama about this project</button><button id="ollama-use-response" type="button">Use response as XML draft</button><p id="ollama-result-status" class="small" role="status">Prepare AI context above first.</p><pre id="ollama-response">Ollama's response will appear here.</pre></section>
 
@@ -116,6 +117,60 @@ document.querySelector('#ollama-run').addEventListener('click',async()=>{
   resultStatus.textContent='Completed with '+d.model+(d.eval_count?' · '+d.eval_count+' output tokens':'')+'. Request stayed on this computer.';
  }catch(e){resultStatus.textContent='Ollama request failed: '+e.message;}
 });
+
+const coordAgent=document.querySelector('#coord-agent'),coordStatus=document.querySelector('#coord-status'),coordTasks=document.querySelector('#coord-tasks'),coordMessages=document.querySelector('#coord-messages');
+let coordTaskCache=[];
+async function coordRequest(url,options={}){const response=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});const data=await response.json();if(!response.ok)throw new Error(data.detail||'Coordination request failed');return data;}
+function renderCoordTasks(tasks){
+ coordTaskCache=tasks;coordTasks.replaceChildren();
+ if(!tasks.length){coordTasks.append(addText('p','No shared tasks yet. Create one to start coordinating.','empty'));return;}
+ for(const task of tasks){
+  const card=document.createElement('article');card.className='event';
+  card.append(addText('h3',task.id+' · '+task.title));
+  card.append(addText('p',task.description||'No task details.','small'));
+  card.append(addText('p','Status: '+task.status+' · Owner: '+(task.owner||'unassigned')+' · Branch: '+(task.branch||'not set')+' · v'+task.version,'event-meta'));
+  const actions=document.createElement('div');actions.className='grid';
+  if(task.status==='open'||task.owner===coordAgent.value){
+   const claim=document.createElement('button');claim.type='button';claim.textContent=task.owner===coordAgent.value?'Claim / take ownership':'Claim task';
+   claim.addEventListener('click',async()=>{try{await coordRequest('/api/coordination/tasks/'+encodeURIComponent(task.id)+'/claim',{method:'POST',body:JSON.stringify({agent:coordAgent.value})});await refreshCoordination();}catch(e){coordStatus.textContent=e.message;}});
+   actions.append(claim);
+  }
+  if(task.owner===coordAgent.value){
+   const status=document.createElement('select');status.style.cssText='width:100%;background:#090d17;border:1px solid #4a4865;color:#fff;border-radius:8px;padding:12px;font:inherit';
+   for(const value of ['claimed','in_review','done','blocked','open'])status.append(new Option(value,value));
+   status.value=task.status;
+   const update=document.createElement('button');update.type='button';update.textContent='Update status';
+   update.addEventListener('click',async()=>{try{await coordRequest('/api/coordination/tasks/'+encodeURIComponent(task.id),{method:'PATCH',body:JSON.stringify({agent:coordAgent.value,status:status.value})});await refreshCoordination();}catch(e){coordStatus.textContent=e.message;}});
+   actions.append(status,update);
+  }
+  card.append(actions);coordTasks.append(card);
+ }
+}
+async function refreshCoordination(){
+ coordStatus.textContent='Refreshing…';
+ try{
+  const [taskData,messageData,statusData]=await Promise.all([
+   coordRequest('/api/coordination/tasks'),coordRequest('/api/coordination/messages?limit=100'),coordRequest('/api/coordination/status')
+  ]);
+  renderCoordTasks(taskData.tasks);coordMessages.replaceChildren();
+  if(!messageData.messages.length)coordMessages.append(addText('p','No messages yet.','empty'));
+  for(const item of messageData.messages){const line=addText('p','['+item.agent+'] '+item.body,'small');coordMessages.append(line);}
+  coordStatus.textContent=statusData.storage+' · '+taskData.tasks.length+' task(s) · poll-and-publish';
+ }catch(e){coordStatus.textContent='Unavailable: '+e.message;}
+}
+document.querySelector('#coord-refresh').addEventListener('click',refreshCoordination);
+document.querySelector('#coord-task-form').addEventListener('submit',async event=>{
+ event.preventDefault();const title=document.querySelector('#coord-title'),description=document.querySelector('#coord-description');
+ try{await coordRequest('/api/coordination/tasks',{method:'POST',body:JSON.stringify({title:title.value,description:description.value,created_by:coordAgent.value})});title.value='';description.value='';await refreshCoordination();}
+ catch(e){coordStatus.textContent=e.message;}
+});
+document.querySelector('#coord-message-form').addEventListener('submit',async event=>{
+ event.preventDefault();const field=document.querySelector('#coord-message');if(!field.value.trim())return;
+ try{await coordRequest('/api/coordination/messages',{method:'POST',body:JSON.stringify({agent:coordAgent.value,body:field.value})});field.value='';await refreshCoordination();}
+ catch(e){coordStatus.textContent=e.message;}
+});
+refreshCoordination();
+
 checkStatus();
 refreshOllama();
 </script></body></html>
