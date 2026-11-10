@@ -50,13 +50,19 @@ Install Ollama separately and pull at least one model (for example, `ollama pull
 
 Keep the service local and only use trusted project files.
 
+## MCP server (read-only)
+
+`construct2-ai-bridge-mcp` runs a stdio [Model Context Protocol](https://modelcontextprotocol.io) server with no extra dependencies, so MCP-capable AI clients can inspect a project directly. Register it in your client as a stdio server with that command. It is independent of the web UI process and keeps its own open project.
+
+Tools (all read-only; none writes to a project file): `open_project`, `project_summary`, `list_events`, `explain_events` (readable IF/THEN rendering), `lint_project` (heuristic hints such as empty events or unused global variables), and `get_xml`. Edits remain in the reviewed write/patch workflow in the local UI. Output is best-effort; verify in the Construct 2 editor.
+
 ## Roadmap
 1. A0 — local service, UI, project loading.
 2. A1 — improve project parsing against real projects.
 3. A2 — provider-independent adapters for hosted and local AI, plus browser-based AI workflow.
 4. A3 — event-sheet explanation and change proposals.
 5. A4 — safe editing with previews, validation, backups, and explicit approval.
-6. A5 — MCP adapter for compatible AI clients.
+6. A5 — MCP adapter for compatible AI clients. Read-only stdio server shipped (`construct2-ai-bridge-mcp`); an approval-gated write tool is not planned until the client-side confirmation story is clear.
 7. A6 — tests and documentation using sanitized sample projects.
 8. B0 — one-command companion window launch (`construct2-ai-bridge --window`).
 9. B1 — build and validate a Construct 2 SDK plugin that can launch the companion; do not rely on undocumented editor DOM hooks for a docked panel.
