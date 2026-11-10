@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation and read-only inspection, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow runs the Python test suite on pushes and pull requests, including API endpoint regression tests.
+Phase A foundation with read/write XML project integration, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, reviewed XML editing with automatic backups and atomic writes, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow runs the Python test suite on pushes and pull requests, including API endpoint regression tests.
 
 ## Requirements
 - Python 3.10+
@@ -20,10 +20,10 @@ To launch the interface in a separate browser window once the local service is r
 On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open http://127.0.0.1:8765.
 
 ## Browser-based AI without API keys
-See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. This first implementation is manual and user-supervised: it prepares prompts and captures visible replies but does not auto-submit or edit project files.
+See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. The browser extension remains user-supervised for hosted AI providers: it prepares prompts and captures visible replies. Project edits are reviewed and applied through the local bridge editor.
 
 
-## Local AI with Ollama
+## Read/write workflow\n\nOpen a `.capx` or `.caproj`, select an XML document in the **XML editor · read & write** panel, and load its full contents. Edit it directly or ask Ollama for a complete updated XML proposal, then use **Use response as XML draft**. Review the changed-line preview and click **Apply approved changes to project**. The bridge validates the XML and project archive, checks that the on-disk project has not changed since it was loaded, saves a numbered backup, and atomically replaces the file. Reload the project in Construct 2 to verify runtime behavior. This is XML-level editing, not yet a schema-aware visual Construct 2 event editor; preserve unknown project structures and review generated changes carefully.\n\n## Local AI with Ollama
 
 Install Ollama separately and pull at least one model (for example, `ollama pull qwen2.5:7b`). Start Ollama, run the bridge, and open the local interface. The Ollama panel checks `http://127.0.0.1:11434`, lists installed models, and lets you submit the prepared debugging context to a selected model.
 
@@ -38,7 +38,7 @@ Install Ollama separately and pull at least one model (for example, `ollama pull
 - GET /api/status — service status.
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with stable-in-that-document `event_id` / `event_index` references, nesting depth, condition/action labels, and basic parameter attributes where detectable. The outline parser recognizes normalized `event-block` nodes as well as generic event/group nodes and reports when the outline reaches its safety limit.
-- GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
+- POST /api/project/write — applies one explicitly approved XML document update. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.\n- GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines with `event_id` / `event_index` references and condition/action parameter details where detectable. Outlines are heuristic and may not map every Construct 2 version's event format.\n- GET /api/ai-context — returns a bounded JSON context string designed to paste into an AI chat. Optional repeated `event_ids` parameters focus the context on selected events; `max_chars` accepts 1,000–40,000 characters. Unknown event IDs return HTTP 400. Nothing is sent to an AI provider automatically.
 
