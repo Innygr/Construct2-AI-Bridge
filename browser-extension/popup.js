@@ -8,32 +8,10 @@ let coordinationPoll = null;
 let lastMessageId = 0;
 let coordinationBusy = false;
 
-function normalizeApiBase(value) {
-  const parsed = new URL(String(value || "").trim());
-  if (parsed.protocol !== "http:" ||
-      !["127.0.0.1", "localhost"].includes(parsed.hostname) ||
-      parsed.username || parsed.password || parsed.search || parsed.hash ||
-      (parsed.pathname !== "/" && parsed.pathname !== "")) {
-    throw new Error("Use a loopback HTTP address only (127.0.0.1 or localhost).");
-  }
-  return parsed.origin;
-}
-
-function apiUrl(path) { return apiBase + path; }
-
-async function apiRequest(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
-  });
-  let data = {};
-  try { data = await response.json(); } catch {}
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
-    throw new Error(detail || ("HTTP " + response.status));
-  }
-  return data;
-}
+const coordinationClient = globalThis.C2AICoordinationClient.createClient(DEFAULT_API_BASE);
+function normalizeApiBase(value) { return globalThis.C2AICoordinationClient.normalizeApiBase(value); }
+function apiUrl(path) { return coordinationClient.url(path); }
+async function apiRequest(path, options = {}) { return coordinationClient.request(path, options); }
 
 function selectedAgent() { return $("coordAgent").value; }
 function coordinationStatus(message, bad = false) {
@@ -150,7 +128,7 @@ async function postCoordinationMessage() {
 async function initializeCoordination() {
   try {
     const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent"]);
-    apiBase = normalizeApiBase(saved.coordinationApiBase || DEFAULT_API_BASE);
+    apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
     $("coordApiBase").value = apiBase;
     $("coordAgent").value = saved.coordinationAgent || "chatgpt";
   } catch (error) {
@@ -163,7 +141,7 @@ async function initializeCoordination() {
       const nextBase = normalizeApiBase($("coordApiBase").value);
       const agent = selectedAgent();
       await api.storage.local.set({ coordinationApiBase: nextBase, coordinationAgent: agent });
-      apiBase = nextBase;
+      apiBase = coordinationClient.setBase(nextBase);
       lastMessageId = 0;
       $("coordMessages").replaceChildren();
       coordinationStatus("Settings saved.");
