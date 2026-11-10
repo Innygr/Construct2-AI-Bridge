@@ -13,12 +13,12 @@ def setup_function() -> None:
     server._current_document = None
 
 
-def test_status_reports_read_only_mode() -> None:
+def test_status_reports_reviewed_write_mode() -> None:
     response = client.get("/api/status")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["mode"] == "read-only"
+    assert body["mode"] == "read-write with approval"
 
 
 def test_summary_requires_open_project() -> None:
@@ -93,7 +93,7 @@ def test_home_page_includes_event_outline_view() -> None:
     assert "Select at least one event" in response.text
     assert "navigator.clipboard.writeText" in response.text
     assert "Nothing is submitted automatically." in response.text
-    assert "Project report (JSON)" in response.text
+    assert "Advanced: full project report (JSON)" in response.text
 
 
 def test_ai_context_returns_grounded_prompt_ready_context(tmp_path: Path) -> None:
@@ -219,6 +219,11 @@ def test_ollama_controls_are_present_in_home_page() -> None:
     assert 'id="ollama-refresh"' in response.text
     assert 'id="ollama-run"' in response.text
     assert "/api/ollama/chat" in response.text
+    assert 'id="xml-editor-card"' in response.text
+    assert 'id="xml-document"' in response.text
+    assert 'id="xml-draft"' in response.text
+    assert 'id="xml-apply"' in response.text
+    assert "/api/project/write" in response.text
 
 
 
