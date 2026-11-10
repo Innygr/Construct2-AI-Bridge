@@ -22,6 +22,18 @@ On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open h
 ## Browser-based AI without API keys
 See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. This first implementation is manual and user-supervised: it prepares prompts and captures visible replies but does not auto-submit or edit project files.
 
+
+## Local AI with Ollama
+
+Install Ollama separately and pull at least one model (for example, `ollama pull qwen2.5:7b`). Start Ollama, run the bridge, and open the local interface. The Ollama panel checks `http://127.0.0.1:11434`, lists installed models, and lets you submit the prepared debugging context to a selected model.
+
+- Ollama is optional; project inspection and browser-based AI workflows work without it.
+- The bridge contacts only the local Ollama address at `127.0.0.1:11434`; there is no configurable remote host.
+- Model requests are user-triggered and non-streaming. Large prompts and slower models can take several minutes.
+- Pulling/downloading models is handled by the Ollama application, not by this bridge.
+- No prompt is sent to Ollama until you click **Run with Ollama**. Review project context before submitting it.
+- API endpoints: `GET /api/ollama/status` and `POST /api/ollama/chat`.
+
 ## API
 - GET /api/status — service status.
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
