@@ -6,7 +6,7 @@ The extension popup includes an optional coordination panel for the local bridge
 
 The default bridge address is `http://127.0.0.1:8765`. The popup remembers a custom address in browser-local extension storage, but accepts loopback HTTP addresses only (`127.0.0.1` or `localhost`). Keep the bridge bound to loopback; do not expose its unauthenticated coordination API to a LAN or the public internet.
 
-The popup reads open tasks from `GET /api/coordination/tasks?status=open` and messages from `GET /api/coordination/messages?after_id=<id>&limit=100`. It refreshes every 12 seconds while the popup is open and stops polling when the popup is closed.
+The popup reads open and claimed tasks from `GET /api/coordination/tasks?status=open` and messages from `GET /api/coordination/messages?after_id=<id>&limit=100`. The branch name used for claims is configurable and saved with the other popup settings. It refreshes every 12 seconds while the popup is open and stops polling when the popup is closed.
 
 ## User-controlled actions
 
