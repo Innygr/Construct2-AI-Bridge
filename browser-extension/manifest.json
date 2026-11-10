@@ -10,8 +10,7 @@
   ],
   "host_permissions": [
     "http://127.0.0.1:8765/*",
-    "http://localhost/*",
-    "http://[::1]/*"
+    "http://localhost/*"
   ],
   "action": {
     "default_title": "Construct 2 AI Bridge",
