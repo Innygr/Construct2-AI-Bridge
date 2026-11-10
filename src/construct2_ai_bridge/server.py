@@ -23,7 +23,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
-_current_summary: dict[str, Any] | None = None\n_current_document = None
+_current_summary: dict[str, Any] | None = None
+_current_document = None
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
