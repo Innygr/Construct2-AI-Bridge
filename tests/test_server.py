@@ -219,3 +219,33 @@ def test_ollama_controls_are_present_in_home_page() -> None:
     assert 'id="ollama-refresh"' in response.text
     assert 'id="ollama-run"' in response.text
     assert "/api/ollama/chat" in response.text
+
+
+
+def test_ollama_chat_returns_local_model_response(monkeypatch) -> None:
+    import io
+    import json
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size=-1):
+            return json.dumps({
+                "model": "qwen2.5:7b",
+                "message": {"role": "assistant", "content": "Check the event order."},
+                "done": True,
+                "eval_count": 12,
+            }).encode("utf-8")
+
+    monkeypatch.setattr(server.urllib.request, "urlopen", lambda *args, **kwargs: FakeResponse())
+    response = client.post("/api/ollama/chat", json={
+        "model": "qwen2.5:7b",
+        "prompt": "Debug this event sheet.",
+    })
+    assert response.status_code == 200
+    assert response.json()["response"] == "Check the event order."
+    assert response.json()["model"] == "qwen2.5:7b"
