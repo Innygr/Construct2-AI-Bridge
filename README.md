@@ -35,7 +35,7 @@ Install Ollama separately and pull at least one model (for example, `ollama pull
 - API endpoints: `GET /api/ollama/status` and `POST /api/ollama/chat`.
 
 ## API
-- GET /api/status — service status.
+- GET /api/status — service status (reports read/write-with-approval mode).
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with stable-in-that-document `event_id` / `event_index` references, nesting depth, condition/action labels, and basic parameter attributes where detectable. The outline parser recognizes normalized `event-block` nodes as well as generic event/group nodes and reports when the outline reaches its safety limit.
 - POST /api/project/write — applies one explicitly approved XML document update. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.\n- GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
@@ -56,7 +56,7 @@ Keep the service local and only use trusted project files.
 9. B1 — build and validate a Construct 2 SDK plugin that can launch the companion; do not rely on undocumented editor DOM hooks for a docked panel.
 
 ## Safety and limitations
-- This version does not modify project files or execute project content.
+- Project writes are limited to explicitly approved XML documents. Each write validates the XML, checks a project hash to reject stale edits, creates a numbered backup, validates a temporary replacement, and uses atomic replacement. The bridge does not execute project content.
 - XML DTD/entity declarations are rejected.
 - The server binds to loopback only; do not expose it to a network.
 - Construct 2 project formats vary, so inspection is best-effort. Diagnostics indicate structures the parser did not detect; they are not proof that the project is broken. Verify results in the editor.
