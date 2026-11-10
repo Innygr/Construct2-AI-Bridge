@@ -24,12 +24,13 @@ async function loadCoordination() {
   coordinationBusy = true;
   try {
     const [taskData, messageData] = await Promise.all([
-      apiRequest("/api/coordination/tasks"),
+      apiRequest("/api/coordination/tasks?status=open"),
       apiRequest("/api/coordination/messages?after_id=" + lastMessageId + "&limit=100")
     ]);
-    renderCoordinationTasks(taskData.tasks || []);
+    const tasks = Array.isArray(taskData) ? taskData : (taskData.tasks || []);
+    renderCoordinationTasks(tasks);
     appendCoordinationMessages(messageData.messages || []);
-    coordinationStatus("Connected · " + (taskData.tasks || []).length + " task(s)");
+    coordinationStatus("Connected · " + tasks.length + " open task(s)");
   } catch (error) {
     coordinationStatus("Bridge unavailable: " + error.message, true);
   } finally {
