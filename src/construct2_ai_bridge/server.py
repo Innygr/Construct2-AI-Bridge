@@ -1,5 +1,7 @@
 """Local HTTP API and browser interface."""
 import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Query
@@ -26,15 +28,75 @@ _current_summary: dict[str, Any] | None = None\n_current_document = None
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
 
+
+class OllamaChatRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=200)
+    prompt: str = Field(min_length=1, max_length=200000)
+    system: str = Field(default="You are a careful Construct 2 debugging assistant. Ground claims in supplied project evidence, distinguish observations from hypotheses, and suggest changes only.", max_length=8000)
+
+
+@app.get("/api/ollama/status")
+def ollama_status() -> dict[str, Any]:
+    """Check the local Ollama service and list locally installed models."""
+    request = urllib.request.Request("http://127.0.0.1:11434/api/tags", headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            data = json.loads(response.read(2_000_000).decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        return {"available": False, "models": [], "message": f"Could not reach Ollama at 127.0.0.1:11434: {exc}"}
+    models = [
+        {"name": item.get("name", ""), "size": item.get("size")}
+        for item in data.get("models", [])
+        if isinstance(item, dict) and item.get("name")
+    ]
+    return {"available": True, "models": models, "message": "Ollama is online."}
+
+
+@app.post("/api/ollama/chat")
+def ollama_chat(request: OllamaChatRequest) -> dict[str, Any]:
+    """Send an explicitly submitted prompt to the local Ollama instance."""
+    payload = json.dumps({
+        "model": request.model,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": request.system},
+            {"role": "user", "content": request.prompt},
+        ],
+    }).encode("utf-8")
+    upstream = urllib.request.Request(
+        "http://127.0.0.1:11434/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(upstream, timeout=300) as response:
+            result = json.loads(response.read(20_000_000).decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(4000).decode("utf-8", errors="replace")
+        raise HTTPException(status_code=502, detail=f"Ollama returned HTTP {exc.code}: {detail}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Could not complete local Ollama request: {exc}") from exc
+    message = result.get("message", {})
+    return {
+        "model": result.get("model", request.model),
+        "response": message.get("content", "") if isinstance(message, dict) else "",
+        "done": result.get("done", False),
+        "total_duration": result.get("total_duration"),
+        "prompt_eval_count": result.get("prompt_eval_count"),
+        "eval_count": result.get("eval_count"),
+    }
+
 @app.get("/api/status")
 def status() -> dict[str, str]:
     return {"status": "ok", "name": "Construct 2 AI Bridge", "version": __version__, "mode": "read-only"}
 
 @app.post("/api/project/open")
 def open_project(request: OpenProjectRequest) -> dict[str, Any]:
-    global _current_summary
+    global _current_summary, _current_document
     try:
         document = load_project(request.path)
+        _current_document = document
         _current_summary = inspect_project(document)
     except ProjectReadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
