@@ -9,7 +9,8 @@ client = TestClient(server.app)
 
 def setup_function() -> None:
     # The API stores the active project in module state; isolate each test.
-    server._current_summary = None\n    server._current_document = None
+    server._current_summary = None
+    server._current_document = None
 
 
 def test_status_reports_read_only_mode() -> None:
