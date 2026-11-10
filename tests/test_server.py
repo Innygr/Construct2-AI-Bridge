@@ -327,3 +327,63 @@ def test_write_project_xml_replaces_only_selected_capx_member(tmp_path: Path) ->
         assert archive.read("data.bin") == b"keep-this"
     with zipfile.ZipFile(str(project) + ".bak", "r") as backup:
         assert backup.read("project.xml") == original_xml
+
+
+def test_project_tree_returns_bounded_child_index_paths(tmp_path: Path) -> None:
+    project = tmp_path / "tree.caproj"
+    project.write_text('<c2project><layout name="Start"><layer name="World" /></layout></c2project>', encoding="utf-8")
+    assert client.post("/api/project/open", json={"path": str(project)}).status_code == 200
+    response = client.get("/api/project/tree", params={"document": "tree.caproj"})
+    assert response.status_code == 200
+    tree = response.json()["tree"]
+    assert tree["tag"] == "c2project"
+    assert tree["children"][0]["path"] == [0]
+    assert tree["children"][0]["children"][0]["attributes"]["name"] == "World"
+
+
+def test_structured_patch_updates_xml_and_creates_backup(tmp_path: Path) -> None:
+    project = tmp_path / "patch.caproj"
+    original = '<c2project><layout name="Start" /></c2project>'
+    project.write_text(original, encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    response = client.post("/api/project/patch", json={
+        "document": "patch.caproj",
+        "expected_project_sha256": opened.json()["project_sha256"],
+        "operations": [
+            {"op": "set_attribute", "path": [0], "name": "name", "value": "Main"}
+        ],
+    })
+    assert response.status_code == 200
+    assert response.json()["patched"] is True
+    assert response.json()["operation_count"] == 1
+    assert 'name="Main"' in project.read_text(encoding="utf-8")
+    assert Path(str(project) + ".bak").read_text(encoding="utf-8") == original
+
+
+def test_structured_patch_rejects_root_deletion_without_writing(tmp_path: Path) -> None:
+    project = tmp_path / "patch.caproj"
+    original = '<c2project><layout name="Start" /></c2project>'
+    project.write_text(original, encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    response = client.post("/api/project/patch", json={
+        "document": "patch.caproj",
+        "expected_project_sha256": opened.json()["project_sha256"],
+        "operations": [{"op": "delete_node", "path": []}],
+    })
+    assert response.status_code == 400
+    assert project.read_text(encoding="utf-8") == original
+    assert not Path(str(project) + ".bak").exists()
+
+
+def test_structured_patch_rejects_stale_project_hash(tmp_path: Path) -> None:
+    project = tmp_path / "patch.caproj"
+    project.write_text('<c2project />', encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    project.write_text('<c2project><external /></c2project>', encoding="utf-8")
+    response = client.post("/api/project/patch", json={
+        "document": "patch.caproj",
+        "expected_project_sha256": opened.json()["project_sha256"],
+        "operations": [{"op": "set_attribute", "path": [], "name": "edited", "value": "yes"}],
+    })
+    assert response.status_code == 409
+    assert "<external" in project.read_text(encoding="utf-8")
