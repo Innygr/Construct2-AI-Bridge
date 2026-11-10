@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -39,6 +40,20 @@ class WriteXmlRequest(BaseModel):
     document: str = Field(min_length=1, max_length=4096)
     xml: str = Field(min_length=1, max_length=32 * 1024 * 1024)
     expected_project_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class XmlOperation(BaseModel):
+    op: str = Field(pattern=r"^(set_attribute|remove_attribute|set_text|append_xml|delete_node)$")
+    path: list[int] = Field(default_factory=list, max_length=128)
+    name: str | None = Field(default=None, max_length=256)
+    value: str | None = Field(default=None, max_length=MAX_XML_BYTES)
+    xml: str | None = Field(default=None, max_length=MAX_XML_BYTES)
+
+
+class PatchXmlRequest(BaseModel):
+    document: str = Field(min_length=1, max_length=4096)
+    expected_project_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    operations: list[XmlOperation] = Field(min_length=1, max_length=100)
 
 
 class OllamaChatRequest(BaseModel):
@@ -197,6 +212,105 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+
+def _get_xml_node(root: ET.Element, path: list[int]) -> ET.Element:
+    node = root
+    for index in path:
+        children = list(node)
+        if index < 0 or index >= len(children):
+            raise ValueError(f"Node path {path} is invalid at child index {index}.")
+        node = children[index]
+    return node
+
+
+def _xml_tree(root: ET.Element, max_nodes: int = 1000) -> dict[str, Any]:
+    count = 0
+    def build(node: ET.Element, path: list[int], depth: int) -> dict[str, Any]:
+        nonlocal count
+        count += 1
+        if count > max_nodes:
+            raise ValueError(f"XML tree exceeds the {max_nodes}-node display limit.")
+        result: dict[str, Any] = {
+            "path": path,
+            "tag": node.tag,
+            "attributes": dict(node.attrib),
+            "text": (node.text or "").strip()[:500],
+            "children": [],
+        }
+        if depth < 64:
+            for index, child in enumerate(list(node)):
+                if count >= max_nodes:
+                    result["truncated"] = True
+                    break
+                result["children"].append(build(child, path + [index], depth + 1))
+        elif list(node):
+            result["truncated"] = True
+        return result
+    return build(root, [], 0)
+
+
+@app.get("/api/project/tree")
+def project_xml_tree(document: str = Query(..., min_length=1, max_length=4096)) -> dict[str, Any]:
+    _require_project()
+    if _current_document is None:
+        raise HTTPException(status_code=404, detail="No project XML is loaded.")
+    available = dict(_current_document.xml_documents)
+    if document not in available:
+        raise HTTPException(status_code=400, detail=f"Unknown XML document: {document}")
+    try:
+        root = _parse_xml(available[document], document)
+        return {"document": document, "tree": _xml_tree(root), "project_sha256": _file_sha256(Path(_current_document.path))}
+    except (ProjectReadError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/project/patch")
+def patch_project_xml(request: PatchXmlRequest) -> dict[str, Any]:
+    """Apply small, explicit structural XML operations through the normal backup/write path."""
+    if _current_document is None:
+        raise HTTPException(status_code=404, detail="No project XML is loaded.")
+    available = dict(_current_document.xml_documents)
+    if request.document not in available:
+        raise HTTPException(status_code=400, detail=f"Unknown XML document: {request.document}")
+    try:
+        root = _parse_xml(available[request.document], request.document)
+        for operation in request.operations:
+            node = _get_xml_node(root, operation.path)
+            if operation.op == "set_attribute":
+                if not operation.name or operation.value is None:
+                    raise ValueError("set_attribute requires name and value.")
+                node.set(operation.name, operation.value)
+            elif operation.op == "remove_attribute":
+                if not operation.name:
+                    raise ValueError("remove_attribute requires name.")
+                if operation.name not in node.attrib:
+                    raise ValueError(f"Attribute {operation.name!r} does not exist at {operation.path}.")
+                del node.attrib[operation.name]
+            elif operation.op == "set_text":
+                node.text = operation.value or ""
+            elif operation.op == "append_xml":
+                if not operation.xml:
+                    raise ValueError("append_xml requires an XML fragment.")
+                fragment = _parse_xml(operation.xml.encode("utf-8"), "patch fragment")
+                node.append(fragment)
+            elif operation.op == "delete_node":
+                if not operation.path:
+                    raise ValueError("Deleting the document root is not allowed.")
+                parent = _get_xml_node(root, operation.path[:-1])
+                parent.remove(node)
+        candidate = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
+        write_result = write_project_xml(WriteXmlRequest(
+            document=request.document,
+            xml=candidate,
+            expected_project_sha256=request.expected_project_sha256,
+        ))
+        return {"patched": True, "operation_count": len(request.operations), **write_result}
+    except HTTPException:
+        raise
+    except (ValueError, ProjectReadError, ET.ParseError) as exc:
+        raise HTTPException(status_code=400, detail=f"Patch rejected: {exc}") from exc
 
 
 @app.get("/api/project/summary")
