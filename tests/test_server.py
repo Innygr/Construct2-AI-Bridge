@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from construct2_ai_bridge import server
+from construct2_ai_bridge.coordination import CoordinationError, CoordinationStore
 
 client = TestClient(server.app)
 
@@ -401,3 +402,69 @@ def test_structured_patch_preserves_xml_comments(tmp_path: Path) -> None:
     })
     assert response.status_code == 200
     assert "<!-- keep this note -->" in project.read_text(encoding="utf-8")
+
+
+def test_coordination_tasks_claims_and_messages_are_shared(tmp_path: Path) -> None:
+    store = CoordinationStore(tmp_path / "coordination.sqlite3")
+    task = store.create_task("Parse event conditions", "Inspect condition nodes.", "chatgpt")
+    claimed = store.claim_task(task["id"], "claude", "claude/event-parser")
+    assert claimed["owner"] == "claude"
+    assert claimed["branch"] == "claude/event-parser"
+    with pytest.raises(CoordinationError) as conflict:
+        store.claim_task(task["id"], "chatgpt", "chatgpt/parser")
+    assert conflict.value.status_code == 409
+    message = store.post_message("claude", "I found the condition node structure.", task["id"])
+    assert message["task_id"] == task["id"]
+    assert store.list_messages(task["id"])[0]["agent"] == "claude"
+
+
+def test_coordination_file_locks_prevent_cross_agent_edits(tmp_path: Path) -> None:
+    store = CoordinationStore(tmp_path / "coordination.sqlite3")
+    lock = store.acquire_lock("src/parser.py", "claude", None, 900)
+    with pytest.raises(CoordinationError) as conflict:
+        store.acquire_lock("src/parser.py", "chatgpt", None, 900)
+    assert conflict.value.status_code == 409
+    store.release_lock("src/parser.py", "claude", lock["token"])
+    assert store.list_locks() == []
+
+
+def test_coordination_lock_token_is_required_to_release(tmp_path: Path) -> None:
+    store = CoordinationStore(tmp_path / "coordination.sqlite3")
+    store.acquire_lock("src/parser.py", "claude", None, 900)
+    with pytest.raises(CoordinationError):
+        store.release_lock("src/parser.py", "chatgpt", "not-the-token")
+    assert len(store.list_locks()) == 1
+
+
+def test_coordination_store_persists_across_instances(tmp_path: Path) -> None:
+    db = tmp_path / "coordination.sqlite3"
+    first = CoordinationStore(db)
+    task = first.create_task("Persist this", "", "chatgpt")
+    second = CoordinationStore(db)
+    assert second.list_tasks()[0]["id"] == task["id"]
+
+
+def test_coordination_api_and_rejects_unsafe_lock_paths(tmp_path: Path) -> None:
+    original = server._coordination
+    server._coordination = CoordinationStore(tmp_path / "api.sqlite3")
+    try:
+        task_response = client.post("/api/coordination/tasks", json={
+            "title": "Review parser",
+            "description": "Check parser safety.",
+            "created_by": "chatgpt",
+        })
+        assert task_response.status_code == 200
+        task_id = task_response.json()["task"]["id"]
+        claim = client.post(f"/api/coordination/tasks/{task_id}/claim", json={"agent": "claude"})
+        assert claim.status_code == 200
+        message = client.post("/api/coordination/messages", json={
+            "agent": "claude", "task_id": task_id, "body": "Review complete.",
+        })
+        assert message.status_code == 200
+        assert client.get("/api/coordination/messages", params={"task_id": task_id}).json()["messages"]
+        unsafe = client.post("/api/coordination/locks", json={
+            "path": "../server.py", "agent": "chatgpt",
+        })
+        assert unsafe.status_code == 400
+    finally:
+        server._coordination = original
