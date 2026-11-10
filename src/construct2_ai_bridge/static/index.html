@@ -77,7 +77,7 @@ document.querySelector('#ollama-patch-run').addEventListener('click',async()=>{
  catch(e){patchStatus.textContent='Ollama patch request failed: '+e.message;}
 });
 document.querySelector('#xml-patch-use-response').addEventListener('click',()=>{
- const response=document.querySelector('#ollama-response').textContent;const start=response.indexOf('\`\`\`json');const end=start>=0?response.indexOf('\`\`\`',start+7):-1;const raw=(start>=0&&end>start?response.slice(start+7,end):response).trim();
+ const response=document.querySelector("#ollama-response").textContent;const start=response.indexOf("```json");const end=start>=0?response.indexOf("```",start+7):-1;const raw=(start>=0&&end>start?response.slice(start+7,end):response).trim();
  try{const parsed=JSON.parse(raw);if(!Array.isArray(parsed.operations))throw new Error('Expected an operations array.');patchBox.value=JSON.stringify(parsed,null,2);patchApply.disabled=parsed.operations.length===0;patchStatus.textContent=parsed.operations.length+' operation(s) loaded. Review paths and values before applying.';}
  catch(e){patchStatus.textContent='Could not parse AI patch JSON: '+e.message;}
 });
