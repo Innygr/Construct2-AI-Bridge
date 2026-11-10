@@ -159,12 +159,13 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
         if _current_document.kind == "capx":
             replacements = 0
             with zipfile.ZipFile(project_path, "r") as source, zipfile.ZipFile(temp_path, "w") as target:
+                target.comment = source.comment
                 for info in source.infolist():
                     if info.filename == request.document:
                         target.writestr(info, new_bytes)
                         replacements += 1
                     else:
-                        target.writestr(info, source.read(info.filename))
+                        target.writestr(info, source.read(info))
             if replacements != 1:
                 raise ProjectReadError("The selected archive document was missing or duplicated; no changes were applied.")
         else:
@@ -178,6 +179,7 @@ def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
         shutil.copystat(project_path, temp_path)
         os.replace(temp_path, project_path)
         temp_path = None
+        validated.path = str(project_path)
         _current_document = validated
         _current_summary = inspect_project(validated)
         return {
