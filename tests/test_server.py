@@ -350,7 +350,7 @@ def test_structured_patch_updates_xml_and_creates_backup(tmp_path: Path) -> None
         "document": "patch.caproj",
         "expected_project_sha256": opened.json()["project_sha256"],
         "operations": [
-            {"op": "set_attribute", "path": [0], "name": "name", "value": "Main"}
+            {"op": "set_attribute", "path": [1], "name": "name", "value": "Main"}
         ],
     })
     assert response.status_code == 200
