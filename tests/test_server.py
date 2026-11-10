@@ -387,3 +387,17 @@ def test_structured_patch_rejects_stale_project_hash(tmp_path: Path) -> None:
     })
     assert response.status_code == 409
     assert "<external" in project.read_text(encoding="utf-8")
+
+
+def test_structured_patch_preserves_xml_comments(tmp_path: Path) -> None:
+    project = tmp_path / "comments.caproj"
+    original = '<c2project><!-- keep this note --><layout name="Start" /></c2project>'
+    project.write_text(original, encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    response = client.post("/api/project/patch", json={
+        "document": "comments.caproj",
+        "expected_project_sha256": opened.json()["project_sha256"],
+        "operations": [{"op": "set_attribute", "path": [0], "name": "name", "value": "Main"}],
+    })
+    assert response.status_code == 200
+    assert "<!-- keep this note -->" in project.read_text(encoding="utf-8")
