@@ -470,3 +470,27 @@ def test_coordination_api_and_rejects_unsafe_lock_paths(tmp_path: Path) -> None:
         assert unsafe.status_code == 400
     finally:
         server._coordination = original
+
+
+def test_project_write_obeys_agent_file_locks(tmp_path: Path) -> None:
+    original_store = server._coordination
+    server._coordination = CoordinationStore(tmp_path / "locks.sqlite3")
+    try:
+        project = tmp_path / "locked.caproj"
+        original_xml = '<c2project><layout name="Start" /></c2project>'
+        project.write_text(original_xml, encoding="utf-8")
+        opened = client.post("/api/project/open", json={"path": str(project)})
+        lock = server._coordination.acquire_lock(project.name, "claude", None, 900)
+        body = {
+            "document": project.name,
+            "xml": '<c2project><layout name="Main" /></c2project>',
+            "expected_project_sha256": opened.json()["project_sha256"],
+        }
+        blocked = client.post("/api/project/write", json=body)
+        assert blocked.status_code == 409
+        assert project.read_text(encoding="utf-8") == original_xml
+        allowed = client.post("/api/project/write", json={**body, "agent": "claude"})
+        assert allowed.status_code == 200
+        server._coordination.release_lock(project.name, "claude", lock["token"])
+    finally:
+        server._coordination = original_store
