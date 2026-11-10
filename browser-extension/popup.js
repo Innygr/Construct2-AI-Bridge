@@ -11,10 +11,10 @@ let coordinationBusy = false;
 function normalizeApiBase(value) {
   const parsed = new URL(String(value || "").trim());
   if (parsed.protocol !== "http:" ||
-      !["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname) ||
+      !["127.0.0.1", "localhost"].includes(parsed.hostname) ||
       parsed.username || parsed.password || parsed.search || parsed.hash ||
       (parsed.pathname !== "/" && parsed.pathname !== "")) {
-    throw new Error("Use a loopback HTTP address only (127.0.0.1, localhost, or [::1]).");
+    throw new Error("Use a loopback HTTP address only (127.0.0.1 or localhost).");
   }
   return parsed.origin;
 }
@@ -101,6 +101,7 @@ function renderCoordinationTasks(tasks) {
 
 function appendCoordinationMessages(messages) {
   const list = $("coordMessages");
+  if (list.children.length === 0 && list.textContent.trim()) list.replaceChildren();
   for (const message of messages) {
     const item = document.createElement("article");
     item.className = "coord-message";
@@ -119,7 +120,7 @@ function appendCoordinationMessages(messages) {
 
 async function claimCoordinationTask(taskId) {
   const agent = selectedAgent();
-  const branch = "chatgpt/extension-coordination-ui";
+  const branch = agent + "/extension-coordination-ui";
   try {
     await apiRequest("/api/coordination/tasks/" + encodeURIComponent(taskId) + "/claim", {
       method: "POST",
