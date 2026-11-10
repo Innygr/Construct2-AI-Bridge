@@ -249,3 +249,76 @@ def test_ollama_chat_returns_local_model_response(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["response"] == "Check the event order."
     assert response.json()["model"] == "qwen2.5:7b"
+
+
+
+def test_write_project_xml_creates_backup_and_updates_project(tmp_path: Path) -> None:
+    project = tmp_path / "game.caproj"
+    original = '<c2project><layouts><layout name="Start" /></layouts></c2project>'
+    updated = '<c2project><layouts><layout name="NewRoom" /></layouts></c2project>'
+    project.write_text(original, encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    assert opened.status_code == 200
+
+    response = client.post("/api/project/write", json={
+        "document": "game.caproj",
+        "xml": updated,
+        "expected_project_sha256": opened.json()["project_sha256"],
+    })
+    assert response.status_code == 200
+    assert response.json()["written"] is True
+    assert project.read_text(encoding="utf-8") == updated
+    assert Path(str(project) + ".bak").read_text(encoding="utf-8") == original
+    assert response.json()["summary"]["layouts"] == ["NewRoom"]
+
+
+def test_write_project_xml_rejects_invalid_xml_without_touching_file(tmp_path: Path) -> None:
+    project = tmp_path / "game.caproj"
+    original = "<c2project />"
+    project.write_text(original, encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    response = client.post("/api/project/write", json={
+        "document": "game.caproj",
+        "xml": "<c2project>",
+        "expected_project_sha256": opened.json()["project_sha256"],
+    })
+    assert response.status_code == 400
+    assert project.read_text(encoding="utf-8") == original
+    assert not Path(str(project) + ".bak").exists()
+
+
+def test_write_project_xml_rejects_stale_project_hash(tmp_path: Path) -> None:
+    project = tmp_path / "game.caproj"
+    project.write_text("<c2project />", encoding="utf-8")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    project.write_text("<c2project><external-change /></c2project>", encoding="utf-8")
+    response = client.post("/api/project/write", json={
+        "document": "game.caproj",
+        "xml": "<c2project><our-change /></c2project>",
+        "expected_project_sha256": opened.json()["project_sha256"],
+    })
+    assert response.status_code == 409
+    assert "<external-change" in project.read_text(encoding="utf-8")
+
+
+def test_write_project_xml_replaces_only_selected_capx_member(tmp_path: Path) -> None:
+    import zipfile
+
+    project = tmp_path / "game.capx"
+    original_xml = b'<c2project><layouts><layout name="Start" /></layouts></c2project>'
+    updated_xml = b'<c2project><layouts><layout name="NewRoom" /></layouts></c2project>'
+    with zipfile.ZipFile(project, "w") as archive:
+        archive.writestr("project.xml", original_xml)
+        archive.writestr("data.bin", b"keep-this")
+    opened = client.post("/api/project/open", json={"path": str(project)})
+    response = client.post("/api/project/write", json={
+        "document": "project.xml",
+        "xml": updated_xml.decode("utf-8"),
+        "expected_project_sha256": opened.json()["project_sha256"],
+    })
+    assert response.status_code == 200
+    with zipfile.ZipFile(project, "r") as archive:
+        assert archive.read("project.xml") == updated_xml
+        assert archive.read("data.bin") == b"keep-this"
+    with zipfile.ZipFile(str(project) + ".bak", "r") as backup:
+        assert backup.read("project.xml") == original_xml
