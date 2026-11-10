@@ -104,7 +104,8 @@ function appendCoordinationMessages(messages) {
 
 async function claimCoordinationTask(taskId) {
   const agent = selectedAgent();
-  const branch = agent + "/extension-coordination-ui";
+  const branch = $("coordBranch").value.trim();
+  if (!branch || branch.length > 200) return coordinationStatus("Enter a valid Git branch name before claiming.", true);
   try {
     await apiRequest("/api/coordination/tasks/" + encodeURIComponent(taskId) + "/claim", {
       method: "POST",
@@ -133,10 +134,11 @@ async function postCoordinationMessage() {
 
 async function initializeCoordination() {
   try {
-    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent"]);
+    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent", "coordinationBranch"]);
     apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
     $("coordApiBase").value = apiBase;
     $("coordAgent").value = saved.coordinationAgent || "chatgpt";
+    $("coordBranch").value = saved.coordinationBranch || "chatgpt/extension-coordination-ui";
   } catch (error) {
     apiBase = DEFAULT_API_BASE;
     $("coordApiBase").value = DEFAULT_API_BASE;
@@ -146,7 +148,9 @@ async function initializeCoordination() {
     try {
       const nextBase = normalizeApiBase($("coordApiBase").value);
       const agent = selectedAgent();
-      await api.storage.local.set({ coordinationApiBase: nextBase, coordinationAgent: agent });
+      const branch = $("coordBranch").value.trim();
+      if (!branch || branch.length > 200) throw new Error("Enter a valid Git branch name.");
+      await api.storage.local.set({ coordinationApiBase: nextBase, coordinationAgent: agent, coordinationBranch: branch });
       apiBase = coordinationClient.setBase(nextBase);
       lastMessageId = 0;
       $("coordMessages").replaceChildren();
