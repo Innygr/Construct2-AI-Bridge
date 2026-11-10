@@ -1,7 +1,20 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Construct 2 AI Bridge</title><link rel="stylesheet" href="popup.css"></head>
 <body><main><div class="eyebrow">LOCAL CONNECTOR · MULTI-AI</div><h1>Construct 2 <span>AI Bridge</span></h1>
-<p class="hint">Use your normal logged-in AI website tabs. Prepare role-specific prompts, run assistants in parallel, then cross-review their results.</p><label for="provider">Active AI website</label><input id="provider" readonly value="Checking active tab…" aria-live="polite">
+<p class="hint">Use your normal logged-in AI website tabs. Prepare role-specific prompts, run assistants in parallel, then cross-review their results.</p><section class="coord-panel" aria-labelledby="coordHeading">
+<h2 id="coordHeading">Agent coordination</h2>
+<p class="hint">Shared local task board and mailbox. Messages are sent only when you press Post.</p>
+<label for="coordApiBase">Bridge address</label><input id="coordApiBase" type="url" value="http://127.0.0.1:8765" spellcheck="false">
+<div class="row"><label class="agent-label" for="coordAgent">Posting as</label><select id="coordAgent"><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option></select><button id="coordSave" class="secondary">Save</button></div>
+<div class="row"><strong class="subheading">Tasks</strong><button id="coordRefresh" class="secondary compact">Refresh</button></div>
+<div id="coordTasks" class="coord-list"><span class="hint">Connecting to local bridge…</span></div>
+<label for="coordMessageTask">Message topic</label><select id="coordMessageTask"><option value="">General message (no task)</option></select>
+<label for="coordMessage">Shared message</label><textarea id="coordMessage" rows="2" placeholder="Write a handoff, finding, or question…"></textarea>
+<div class="row"><button id="coordPost">Post message</button></div>
+<div class="subheading">Message feed</div><div id="coordMessages" class="coord-list message-list">No coordination messages yet.</div>
+<p id="coordStatus" class="coord-status" role="status">Connecting…</p>
+</section>
+<label for="provider">Active AI website</label><input id="provider" readonly value="Checking active tab…" aria-live="polite">
 <label>Event sheets to include</label><div class="row"><button id="fetch">Load project / event sheets</button><button id="selectAll" class="secondary">Select all</button></div><div id="sheets" class="sheets"><span class="hint">Load a project to choose event sheets.</span></div><details><summary>Project overview</summary><textarea id="project" rows="3" readonly placeholder="Project overview appears here."></textarea></details>
 <label for="mode">Collaboration mode</label><select id="mode"><option value="parallel">Parallel analysis — independent opinions</option><option value="review">Review — critique another AI's proposal</option><option value="synthesis">Synthesis — reconcile both responses</option></select>
 <label for="role">This AI's role</label><select id="role"><option value="architect">Architect — design a solution</option><option value="debugger">Debugger — find causes and edge cases</option><option value="reviewer">Reviewer — challenge assumptions</option><option value="implementer">Implementer — give concrete steps</option></select>
