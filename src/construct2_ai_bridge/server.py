@@ -1,5 +1,10 @@
 """Local HTTP API and browser interface."""
 import json
+import hashlib
+import os
+import shutil
+import tempfile
+import zipfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -9,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from . import __version__
-from .project_reader import ProjectReadError, inspect_project, load_project
+from .project_reader import MAX_XML_BYTES, ProjectReadError, _parse_xml, inspect_project, load_project
 
 app = FastAPI(title="Construct 2 AI Bridge", version=__version__)
 
@@ -28,6 +33,12 @@ _current_document = None
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
+
+
+class WriteXmlRequest(BaseModel):
+    document: str = Field(min_length=1, max_length=4096)
+    xml: str = Field(min_length=1, max_length=32 * 1024 * 1024)
+    expected_project_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 class OllamaChatRequest(BaseModel):
@@ -90,7 +101,7 @@ def ollama_chat(request: OllamaChatRequest) -> dict[str, Any]:
 
 @app.get("/api/status")
 def status() -> dict[str, str]:
-    return {"status": "ok", "name": "Construct 2 AI Bridge", "version": __version__, "mode": "read-only"}
+    return {"status": "ok", "name": "Construct 2 AI Bridge", "version": __version__, "mode": "read-write with approval"}
 
 @app.post("/api/project/open")
 def open_project(request: OpenProjectRequest) -> dict[str, Any]:
@@ -103,7 +114,83 @@ def open_project(request: OpenProjectRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OSError as exc:
         raise HTTPException(status_code=400, detail=f"Could not open project: {exc}") from exc
-    return {"opened": True, "summary": _current_summary}
+    return {"opened": True, "summary": _current_summary, "project_sha256": _file_sha256(Path(document.path))}
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+@app.post("/api/project/write")
+def write_project_xml(request: WriteXmlRequest) -> dict[str, Any]:
+    """Apply one explicitly approved XML document update with backup and atomic replacement."""
+    global _current_document, _current_summary
+    _require_project()
+    if _current_document is None:
+        raise HTTPException(status_code=404, detail="No project XML is loaded.")
+    project_path = Path(_current_document.path)
+    if len(request.xml.encode("utf-8")) > MAX_XML_BYTES:
+        raise HTTPException(status_code=413, detail="Updated XML exceeds the per-document size limit.")
+    try:
+        new_bytes = request.xml.encode("utf-8")
+        _parse_xml(new_bytes, request.document)
+    except (UnicodeEncodeError, ProjectReadError) as exc:
+        raise HTTPException(status_code=400, detail=f"Updated XML is not valid safe XML: {exc}") from exc
+    available = dict(_current_document.xml_documents)
+    if request.document not in available:
+        raise HTTPException(status_code=400, detail=f"Unknown XML document: {request.document}")
+    current_hash = _file_sha256(project_path)
+    if current_hash != request.expected_project_sha256:
+        raise HTTPException(status_code=409, detail="Project changed on disk since it was loaded. Reload it before applying edits.")
+    backup_path = project_path.with_name(project_path.name + ".bak")
+    temp_path = None
+    try:
+        fd, temp_name = tempfile.mkstemp(prefix=f".{project_path.stem}.", suffix=project_path.suffix, dir=project_path.parent)
+        os.close(fd)
+        temp_path = Path(temp_name)
+        if _current_document.kind == "capx":
+            replacements = 0
+            with zipfile.ZipFile(project_path, "r") as source, zipfile.ZipFile(temp_path, "w") as target:
+                for info in source.infolist():
+                    if info.filename == request.document:
+                        target.writestr(info, new_bytes)
+                        replacements += 1
+                    else:
+                        target.writestr(info, source.read(info.filename))
+            if replacements != 1:
+                raise ProjectReadError("The selected archive document was missing or duplicated; no changes were applied.")
+        else:
+            if request.document != project_path.name:
+                raise ProjectReadError("The selected XML document does not match the open project file.")
+            temp_path.write_bytes(new_bytes)
+        validated = load_project(str(temp_path))
+        if _file_sha256(project_path) != request.expected_project_sha256:
+            raise HTTPException(status_code=409, detail="Project changed while the edit was being prepared. No changes were applied.")
+        shutil.copy2(project_path, backup_path)
+        os.replace(temp_path, project_path)
+        temp_path = None
+        _current_document = validated
+        _current_summary = inspect_project(validated)
+        return {
+            "written": True,
+            "document": request.document,
+            "backup": str(backup_path),
+            "project_sha256": _file_sha256(project_path),
+            "summary": _current_summary,
+            "note": "Approved XML saved. A .bak backup was created before replacement.",
+        }
+    except HTTPException:
+        raise
+    except (OSError, zipfile.BadZipFile, ProjectReadError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not safely apply XML update: {exc}") from exc
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
 
 @app.get("/api/project/summary")
 def project_summary() -> dict[str, Any]:
