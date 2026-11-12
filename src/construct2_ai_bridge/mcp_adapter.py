@@ -62,9 +62,16 @@ def bridge_status() -> dict[str, Any]:
 
 
 @mcp.tool()
-def get_project_state() -> dict[str, Any]:
-    """Get the currently opened project, available XML documents, and edit version hash."""
-    return _request("/api/project/state")
+def get_project_state(document: str) -> dict[str, Any]:
+    """Get project summary and the current edit-version hash for a selected XML document."""
+    summary = _request("/api/project/summary")
+    tree = _request("/api/project/tree", query=[("document", document)])
+    return {
+        "project": summary,
+        "document": document,
+        "project_sha256": tree["project_sha256"],
+        "tree_truncated": tree["tree"].get("truncated", False),
+    }
 
 
 @mcp.tool()
@@ -91,14 +98,15 @@ def get_event_details(event_ids: list[str]) -> dict[str, Any]:
     if not event_ids or len(event_ids) > 100:
         raise ValueError("Supply between 1 and 100 event_ids.")
     data = _request("/api/events")
+    wanted = set(event_ids)
     events = [
         event
         for outline in data.get("event_outlines", [])
         for event in outline.get("events", [])
-        if event.get("event_id") in set(event_ids)
+        if event.get("event_id") in wanted
     ]
     found = {event.get("event_id") for event in events}
-    missing = sorted(set(event_ids) - found)
+    missing = sorted(wanted - found)
     if missing:
         raise ValueError("Unknown event_id value(s): " + ", ".join(missing))
     return {"events": events, "count": len(events), "note": data.get("note")}
@@ -146,12 +154,11 @@ def propose_xml_patch(document: str, operations: list[dict[str, Any]]) -> dict[s
             raise ValueError(f"Operation {index} has an invalid child-index path.")
         if operation["op"] == "delete_node" and not path:
             raise ValueError("Deleting the document root is not allowed.")
-    state = _request("/api/project/state")
     tree = _request("/api/project/tree", query=[("document", document)])
     return {
         "proposal_only": True,
         "document": document,
-        "expected_project_sha256": state["project_sha256"],
+        "expected_project_sha256": tree["project_sha256"],
         "operations": operations,
         "current_xml_tree": tree["tree"],
         "approval_required": True,
