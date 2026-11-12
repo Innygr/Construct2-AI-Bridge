@@ -42,27 +42,32 @@ The MCP process communicates with the already-running API on 127.0.0.1:8765. If 
 
 The web connector needs a publicly reachable HTTPS MCP endpoint. The adapter provides a separate Streamable HTTP server on loopback port 8766 and requires a bearer token. Do not tunnel the regular API/UI port 8765.
 
-Start the authenticated MCP HTTP server in terminal 2:
+### Start the tunnel and allowlist its hostname
 
-```powershell
-construct2-ai-bridge-mcp --transport http
-```
-
-On first launch it creates a private bearer token file:
-- Windows: `%APPDATA%\construct2-ai-bridge\mcp-token`
-- Linux: `~/.config/construct2-ai-bridge/mcp-token`
-
-Keep this token private. It is not written to the project or printed to the terminal.
-
-Install Cloudflare Tunnel (`cloudflared`) and start a Quick Tunnel in terminal 3:
+Start a Cloudflare Quick Tunnel first (terminal 2). It can start before the local MCP server is listening:
 
 ```powershell
 cloudflared tunnel --url http://127.0.0.1:8766
 ```
 
-Or run `scripts/start-mcp-tunnel.ps1`. Cloudflare prints a temporary HTTPS hostname. The MCP endpoint is that hostname plus `/mcp`. The HTTP MCP server requires `Authorization: Bearer <token>` on every request.
+Or run `scripts/start-mcp-tunnel.ps1`. Copy only the hostname Cloudflare prints, for example `example-name.trycloudflare.com`.
 
-Quick Tunnel hostnames are temporary and change after restart. For a stable ChatGPT connection, configure a named Cloudflare Tunnel with a hostname on a domain you control, routing only to `http://127.0.0.1:8766`. Keep the bearer token enabled. Never expose port 8765 through the tunnel.
+In terminal 3, allowlist that exact hostname and start the authenticated MCP HTTP server:
+
+```powershell
+$env:C2AB_MCP_ALLOWED_HOSTS = "example-name.trycloudflare.com,example-name.trycloudflare.com:*"
+construct2-ai-bridge-mcp --transport http
+```
+
+On first launch the MCP server creates a private bearer token file:
+- Windows: `%APPDATA%\construct2-ai-bridge\mcp-token`
+- Linux: `~/.config/construct2-ai-bridge/mcp-token`
+
+Keep this token private. It is not written to the project or printed to the terminal. The server validates both the bearer token and the incoming hostname; unlisted hostnames are rejected.
+
+The MCP endpoint is the Cloudflare HTTPS hostname plus `/mcp`. The HTTP MCP server requires `Authorization: Bearer <token>` on every request.
+
+Quick Tunnel hostnames are temporary and change after restart. For a stable ChatGPT connection, configure a named Cloudflare Tunnel with a hostname on a domain you control, routing only to `http://127.0.0.1:8766`, then set `C2AB_MCP_ALLOWED_HOSTS` to that hostname and its `:*` variant. Keep the bearer token enabled. Never expose port 8765 through the tunnel.
 
 Once the HTTPS hostname exists, add the remote MCP server to the ChatGPT connector configuration with:
 - Transport: Streamable HTTP
@@ -96,7 +101,7 @@ Writes continue through the existing API validation, stale-hash check, numbered 
 ## Security notes
 
 - Both the API and MCP HTTP server bind to loopback only.
-- The tunnel must target port 8766 only. The MCP endpoint is protected by a random bearer token.
+- The tunnel must target port 8766 only. The MCP endpoint is protected by a random bearer token and a hostname allowlist.
 - Treat the tunnel hostname and bearer token as credentials; do not publish them.
 - Only connect trusted AI clients and review project context before sharing it.
 - A successful tunnel does not mean ChatGPT has been connected yet; add the returned HTTPS endpoint to the ChatGPT connector after tunnel setup.
