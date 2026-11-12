@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 API_BASE = os.environ.get("C2AB_API_URL", "http://127.0.0.1:8765").rstrip("/")
 HTTP_HOST = "127.0.0.1"
@@ -248,6 +249,27 @@ def _load_or_create_token() -> str:
     return token
 
 
+def _transport_security() -> TransportSecuritySettings:
+    """Allow local health checks and only explicitly configured public tunnel hosts."""
+    hosts = ["127.0.0.1:8766", "localhost:8766", "[::1]:8766"]
+    origins = ["http://127.0.0.1:8766", "http://localhost:8766", "http://[::1]:8766"]
+    for item in os.environ.get("C2AB_MCP_ALLOWED_HOSTS", "").split(","):
+        host = item.strip()
+        if host:
+            hosts.append(host)
+            if ":" not in host.rsplit("]", 1)[-1]:
+                hosts.append(host + ":*")
+    for item in os.environ.get("C2AB_MCP_ALLOWED_ORIGINS", "").split(","):
+        origin = item.strip()
+        if origin:
+            origins.append(origin)
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Construct 2 AI Bridge MCP server")
     parser.add_argument("--transport", choices=("stdio", "http"), default="stdio")
@@ -264,7 +286,10 @@ def main() -> None:
     try:
         import uvicorn
         token = _load_or_create_token()
-        app = BearerTokenMiddleware(mcp.streamable_http_app(), token)
+        app = BearerTokenMiddleware(
+            mcp.streamable_http_app(transport_security=_transport_security()),
+            token,
+        )
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     except Exception as exc:
         print(f"Could not start MCP HTTP server: {exc}", file=sys.stderr)
