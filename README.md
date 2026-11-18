@@ -22,6 +22,11 @@ On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open h
 ## Browser-based AI without API keys
 See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. The browser extension remains user-supervised for hosted AI providers: it prepares prompts and captures visible replies. Project edits are reviewed and applied through the local bridge editor.
 
+## MCP integration for ChatGPT and local clients
+
+The MCP adapter adds local stdio support plus a separately authenticated Streamable HTTP endpoint for an HTTPS tunnel. It exposes project summaries, objects, event sheets, selected XML, AI context, and a proposal-first XML patch workflow. Writes still use the existing validation, stale-project check, backup, and atomic replacement path.
+
+See **[MCP integration and tunnel setup](docs/MCP-INTEGRATION.md)** for installation, local client configuration, Cloudflare Tunnel setup, and the ChatGPT web connector details. The remote ChatGPT endpoint requires a user-configured HTTPS tunnel hostname and bearer token; neither is embedded in the repository.
 
 ## Read/write workflow
 
@@ -42,7 +47,9 @@ Install Ollama separately and pull at least one model (for example, `ollama pull
 - GET /api/status — service status (reports read/write-with-approval mode).
 - POST /api/project/open — JSON body `{"path": "/absolute/path/to/game.capx"}`.
 - GET /api/project/summary — summary for the open project, including bounded per-XML event outlines with stable-in-that-document `event_id` / `event_index` references, nesting depth, condition/action labels, and basic parameter attributes where detectable. The outline parser recognizes normalized `event-block` nodes as well as generic event/group nodes and reports when the outline reaches its safety limit.
-- GET /api/project/tree?document=events.xml — returns a bounded XML node tree (up to 1,000 nodes and 64 levels) with child-index paths for structural patch proposals.\n- POST /api/project/patch — applies 1–100 reviewed path-based XML operations (`set_attribute`, `remove_attribute`, `set_text`, `append_xml`, `delete_node`) using the same stale-hash check, backup, validation, and atomic replacement as normal writes. The root cannot be deleted.\n- POST /api/project/write — applies one explicitly approved XML document update. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.
+- GET /api/project/tree?document=events.xml — returns a bounded XML node tree (up to 1,000 nodes and 64 levels) with child-index paths for structural patch proposals.
+- POST /api/project/patch — applies 1–100 reviewed path-based XML operations (`set_attribute`, `remove_attribute`, `set_text`, `append_xml`, `delete_node`) using the same stale-hash check, backup, validation, and atomic replacement as normal writes. The root cannot be deleted.
+- POST /api/project/write — applies one explicitly approved XML document update. Requires `document`, full `xml`, and the `expected_project_sha256` returned by `/api/project/open`; validates XML, rejects stale project hashes, creates a numbered `.bak` backup, validates the replacement archive/file, and atomically replaces the project.
 - GET /api/project/xml?documents=events.xml — returns the complete XML text for explicitly selected XML document names from the currently open project. Repeat the `documents` query parameter for multiple sheets. This endpoint does not truncate XML; the browser extension uses it only for checked event sheets.
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines with `event_id` / `event_index` references and condition/action parameter details where detectable. Outlines are heuristic and may not map every Construct 2 version's event format.
@@ -71,7 +78,6 @@ Keep the service local and only use trusted project files.
 
 ## License
 MIT. See LICENSE
-
 
 Event outlines preserve explicit event disabled/enabled flags when the project XML provides recognizable boolean attributes. Missing or unknown values are not guessed.
 
