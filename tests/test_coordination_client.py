@@ -197,6 +197,38 @@ def test_rejects_non_loopback_urls(bad_url: str) -> None:
         CoordinationClient("claude", bad_url)
 
 
+@pytest.mark.parametrize("bad_url", [
+    "http://user:pw@127.0.0.1:8765", "http://127.0.0.1:8765/api", "http://127.0.0.1:8765?x=1",
+    "http://127.0.0.1:8765/#frag",
+])
+def test_rejects_urls_that_are_not_a_bare_origin(bad_url: str) -> None:
+    with pytest.raises(ValueError, match="bare loopback origin"):
+        CoordinationClient("claude", bad_url)
+
+
+@pytest.mark.parametrize("good_url", ["http://127.0.0.1:8765", "http://127.0.0.1:8765/", "http://localhost:9000"])
+def test_accepts_bare_loopback_origins(good_url: str) -> None:
+    assert CoordinationClient("claude", good_url).base_url == good_url.rstrip("/")
+
+
+@pytest.mark.parametrize("bad_ttl", [0, 29, 86401, -5, 60.5, "60", True, None])
+def test_lock_ttl_is_validated_before_any_request(bad_ttl) -> None:
+    client = CoordinationClient("claude", "http://127.0.0.1:9")  # nothing listens; a request would raise Unavailable
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        client.acquire_lock("src/a.py", ttl_seconds=bad_ttl)
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        with client.lock("src/a.py", ttl_seconds=bad_ttl):
+            pytest.fail("block must not run")
+
+
+def test_lock_ttl_bounds_are_accepted(bridge) -> None:
+    url, store = bridge
+    client = CoordinationClient("claude", url)
+    client.acquire_lock("src/a.py", ttl_seconds=30)
+    client.acquire_lock("src/b.py", ttl_seconds=86400)
+    assert {lock["path"] for lock in store.list_locks()} == {"src/a.py", "src/b.py"}
+
+
 def test_input_validation() -> None:
     with pytest.raises(ValueError):
         CoordinationClient("")

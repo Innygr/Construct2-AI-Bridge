@@ -20,6 +20,7 @@ from typing import Any, Iterator
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+MIN_LOCK_TTL_SECONDS, MAX_LOCK_TTL_SECONDS = 30, 86400  # enforced by the server (HTTP 422 otherwise)
 
 
 class CoordinationUnavailable(Exception):
@@ -50,6 +51,9 @@ class CoordinationClient:
         parsed = urllib.parse.urlsplit(base_url)
         if parsed.scheme != "http" or (parsed.hostname or "") not in LOOPBACK_HOSTS:
             raise ValueError("Coordination is loopback-only; use an http://127.0.0.1 or http://localhost URL.")
+        # Same strictness as the browser extension's client: an origin only, nothing else.
+        if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+            raise ValueError("Coordination base URL must be a bare loopback origin (no credentials, path, query or fragment).")
         self.agent = agent
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -140,6 +144,9 @@ class CoordinationClient:
 
     def acquire_lock(self, path: str, task_id: str | None = None, ttl_seconds: int = 900) -> dict[str, Any]:
         safe = _safe_lock_path(path)
+        if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int) \
+                or not MIN_LOCK_TTL_SECONDS <= ttl_seconds <= MAX_LOCK_TTL_SECONDS:
+            raise ValueError(f"ttl_seconds must be an integer from {MIN_LOCK_TTL_SECONDS} to {MAX_LOCK_TTL_SECONDS}.")
         lock = self._request("POST", "locks", {"path": safe, "agent": self.agent,
                                                "task_id": task_id, "ttl_seconds": ttl_seconds})["lock"]
         self._tokens[safe] = lock["token"]
