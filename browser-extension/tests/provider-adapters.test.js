@@ -55,5 +55,5 @@ test("manifest keeps the connector on Manifest V3 with narrowly scoped local hos
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.permissions.includes("activeTab"));
   assert.ok(manifest.permissions.includes("scripting"));
-  assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1:8765/*", "http://localhost/*"]);
+  assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*", "http://localhost/*"]);
 });
