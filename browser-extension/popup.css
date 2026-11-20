@@ -19,3 +19,18 @@
 .message-list{max-height:150px}
 .coord-status{font-size:11px;color:#c9baff;min-height:16px;margin:8px 0 0;overflow-wrap:anywhere}
 .coord-status.error{color:#ffaaaa}
+
+
+.coord-task-controls{display:flex;gap:7px;margin-top:8px;align-items:center}
+.coord-task-controls select{flex:1;min-width:0;padding:7px;font-size:11px;text-transform:capitalize}
+.coord-task-controls button{flex:0 0 auto}
+.coord-owned{display:block;margin-top:7px;color:#a9d9bd;font-size:10px}
+.lock-list{max-height:140px}
+.coord-lock{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #29243e}
+.coord-lock:last-child{border-bottom:0}
+.coord-lock>div{min-width:0;flex:1}
+.coord-lock strong,.coord-lock small{display:block;overflow-wrap:anywhere}
+.coord-lock strong{font-size:11px;font-weight:650}
+.coord-lock small{font-size:10px;color:#aaa4c5;margin-top:3px}
+.coord-lock button{flex:0 0 auto}
+#coordLockTtl{max-width:118px}
