@@ -39,7 +39,7 @@ Open `edge://extensions`, enable Developer mode, choose **Load unpacked**, and s
 
 ## Agent coordination panel
 
-The popup also provides a shared local task board and message feed. It can list open and claimed tasks, claim a task against a configurable Git branch, and post explicitly entered handoff messages. The bridge address, agent label, and branch are saved in extension-local storage. Polling runs only while the popup is open. See [the coordination panel guide](../docs/EXTENSION_COORDINATION.md) for API behavior, safety boundaries, and a manual smoke-test checklist.
+The popup also provides a shared local task board, message feed, and advisory file-lock controls. It can list tasks, claim open work against a configurable Git branch, update statuses when the selected agent is the owner or creator, acquire project-relative file locks, release locks using locally stored tokens, and post explicitly entered handoff messages. The bridge address, agent label, branch, and locally held lock tokens are saved in extension-local storage (not synced storage). Lock tokens are never shown in the popup. Polling runs only while the popup is open. See [the coordination panel guide](../docs/EXTENSION_COORDINATION.md) for API contracts, safety boundaries, and a manual smoke-test checklist.
 
 ## Modes
 - **Parallel analysis:** independent findings and proposals.
