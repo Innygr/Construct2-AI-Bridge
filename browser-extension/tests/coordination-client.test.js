@@ -73,7 +73,7 @@ test("task helpers use the documented list, claim, and PATCH contracts", async (
   });
 
   assert.equal((await client.listTasks("open"))[0].id, "C2-12345678");
-  assert.equal((await client.claimTask("C2-12345678", "chatgpt", "chatgpt/extension"))).owner, "chatgpt");
+  assert.equal((await client.claimTask("C2-12345678", "chatgpt", "chatgpt/extension")).owner, "chatgpt");
   assert.equal((await client.updateTask("C2-12345678", "chatgpt", "in_review", "chatgpt/extension")).status, "in_review");
   assert.equal(calls[0].url, "http://127.0.0.1:8765/api/coordination/tasks?status=open");
   assert.deepEqual(JSON.parse(calls[1].options.body), { agent: "chatgpt", branch: "chatgpt/extension" });
