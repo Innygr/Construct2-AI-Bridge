@@ -24,7 +24,8 @@
   function normalizeLockPath(value) {
     const normalized = requiredText(value, "Project-relative path", 1024).replace(/\\/g, "/");
     const parts = normalized.split("/");
-    if (normalized.startsWith("/") || /[\u0000-\u001f\u007f]/.test(normalized) ||
+    if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized) ||
+        /[\u0000-\u001f\u007f]/.test(normalized) ||
         parts.some(part => !part || part === "." || part === "..")) {
       throw new Error("Use a safe project-relative path (no absolute paths, empty segments, or . / .. segments).");
     }
@@ -61,7 +62,11 @@
             path.includes("\\") || /[\u0000-\u001f\u007f]/.test(path)) {
           throw new Error("API paths must be absolute paths on the configured bridge origin.");
         }
-        return base + path;
+        const resolved = new URL(path, base);
+        if (resolved.origin !== base || !resolved.pathname.startsWith("/api/")) {
+          throw new Error("API requests must stay under the configured bridge origin's /api/ route.");
+        }
+        return resolved.href;
       },
       request,
 
