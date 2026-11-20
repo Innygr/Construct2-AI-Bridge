@@ -81,8 +81,8 @@ test("popup loads the coordination client before using it and includes its contr
   ]) {
     assert.match(client, new RegExp("\\b" + method + "\\s*\\("));
   }
-  assert.match(popup, /coordinationClient\\.updateTask\\s*\\(/);
-  assert.match(popup, /coordinationClient\\.acquireLock\\s*\\(/);
-  assert.match(popup, /coordinationClient\\.releaseLock\\s*\\(/);
-  assert.match(popup, /saved\\.bridge\\s*===\\s*apiBase/);
+  assert.match(popup, /coordinationClient\.updateTask\s*\(/);
+  assert.match(popup, /coordinationClient\.acquireLock\s*\(/);
+  assert.match(popup, /coordinationClient\.releaseLock\s*\(/);
+  assert.match(popup, /saved\.bridge\s*===\s*apiBase/);
 });
