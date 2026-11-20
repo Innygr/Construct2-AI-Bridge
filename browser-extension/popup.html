@@ -9,6 +9,11 @@
 <label for="coordBranch">Git branch used when claiming</label><input id="coordBranch" type="text" value="chatgpt/extension-coordination-ui" spellcheck="false">
 <div class="row"><strong class="subheading">Tasks</strong><button id="coordRefresh" class="secondary compact">Refresh</button></div>
 <div id="coordTasks" class="coord-list"><span class="hint">Connecting to local bridge…</span></div>
+<div class="row"><strong class="subheading">File locks</strong></div>
+<label for="coordLockPath">Project-relative file path</label><input id="coordLockPath" type="text" placeholder="event sheets/Events.xml" spellcheck="false">
+<div class="row"><select id="coordLockTask"><option value="">No task association</option></select><select id="coordLockTtl" aria-label="Lock duration"><option value="900">15 minutes</option><option value="1800">30 minutes</option><option value="3600">1 hour</option><option value="14400">4 hours</option></select></div>
+<div class="row"><button id="coordAcquireLock" class="secondary">Acquire file lock</button></div>
+<div id="coordLocks" class="coord-list lock-list"><span class="hint">Loading file locks…</span></div>
 <label for="coordMessageTask">Message topic</label><select id="coordMessageTask"><option value="">General message (no task)</option></select>
 <label for="coordMessage">Shared message</label><textarea id="coordMessage" rows="2" placeholder="Write a handoff, finding, or question…"></textarea>
 <div class="row"><button id="coordPost">Post message</button></div>
