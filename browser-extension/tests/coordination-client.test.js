@@ -53,12 +53,13 @@ test("client rejects paths that could escape the configured bridge route", () =>
   assert.throws(() => client.url("//example.com/path"));
   assert.throws(() => client.url("https://example.com/path"));
   assert.throws(() => client.url("/api\\coordination"));
+  assert.throws(() => client.url("/api/coordination/../../project/write"));
 });
 
 test("normalizes project-relative lock paths and rejects traversal", () => {
   assert.equal(normalizeLockPath("src\\parser.py"), "src/parser.py");
   assert.equal(normalizeLockPath("src/parser.py"), "src/parser.py");
-  for (const value of ["", "/etc/passwd", "../server.py", "src/../server.py", "src//server.py", "src/./server.py"]) {
+  for (const value of ["", "/etc/passwd", "C:\\Windows\\system.ini", "../server.py", "src/../server.py", "src//server.py", "src/./server.py"]) {
     assert.throws(() => normalizeLockPath(value));
   }
 });
