@@ -9,8 +9,9 @@ import os
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 DEFAULT_DB = Path(os.environ.get(
     "C2AI_COORDINATION_DB",
@@ -30,11 +31,21 @@ class CoordinationStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection that commits on success, rolls back on error, and always closes.
+
+        (``with sqlite3.connect(...)`` alone only commits/rolls back; it never closes,
+        which leaked one open connection per call.)
+        """
         db = sqlite3.connect(self.db_path, timeout=10)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA busy_timeout=10000")
-        return db
+        try:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA busy_timeout=10000")
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def _initialize(self) -> None:
         with self._connect() as db:

@@ -181,12 +181,6 @@ def test_concurrent_messages_all_land_with_unique_ids(store: CoordinationStore) 
 
 # --- resource handling -----------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known issue: CoordinationStore._connect() connections are used with `with` (which "
-    "commits but does not close), so every call leaves an unclosed connection until GC. "
-    "Remove this marker once the store closes its connections.",
-)
 def test_operations_do_not_leak_open_sqlite_connections(tmp_path: Path) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
