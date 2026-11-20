@@ -7,6 +7,7 @@ let apiBase = DEFAULT_API_BASE;
 let coordinationPoll = null;
 let lastMessageId = 0;
 let coordinationBusy = false;
+let ownedLocks = [];
 
 const coordinationClient = globalThis.C2AICoordinationClient.createClient(DEFAULT_API_BASE);
 function normalizeApiBase(value) { return globalThis.C2AICoordinationClient.normalizeApiBase(value); }
@@ -23,19 +24,20 @@ async function loadCoordination() {
   if (coordinationBusy) return;
   coordinationBusy = true;
   try {
-    const [openData, claimedData, messageData] = await Promise.all([
-      apiRequest("/api/coordination/tasks?status=open"),
-      apiRequest("/api/coordination/tasks?status=claimed"),
-      apiRequest("/api/coordination/messages?after_id=" + lastMessageId + "&limit=100")
+    const [tasks, messages, locks] = await Promise.all([
+      coordinationClient.listTasks(),
+      coordinationClient.listMessages(lastMessageId, 100),
+      coordinationClient.listLocks()
     ]);
-    const openTasks = Array.isArray(openData) ? openData : (openData.tasks || []);
-    const claimedTasks = Array.isArray(claimedData) ? claimedData : (claimedData.tasks || []);
-    const tasksById = new Map();
-    for (const task of [...openTasks, ...claimedTasks]) tasksById.set(task.id, task);
-    const tasks = [...tasksById.values()];
     renderCoordinationTasks(tasks);
-    appendCoordinationMessages(messageData.messages || []);
-    coordinationStatus("Connected · " + openTasks.length + " open, " + claimedTasks.length + " claimed task(s)");
+    appendCoordinationMessages(messages);
+    renderCoordinationLocks(locks);
+    const counts = tasks.reduce((result, task) => {
+      result[task.status] = (result[task.status] || 0) + 1;
+      return result;
+    }, {});
+    coordinationStatus("Connected · " + (counts.open || 0) + " open, " +
+      (counts.claimed || 0) + " claimed, " + (counts.in_review || 0) + " in review");
   } catch (error) {
     coordinationStatus("Bridge unavailable: " + error.message, true);
   } finally {
@@ -46,12 +48,19 @@ async function loadCoordination() {
 function renderCoordinationTasks(tasks) {
   const list = $("coordTasks");
   const taskSelect = $("coordMessageTask");
+  const lockTaskSelect = $("coordLockTask");
   list.replaceChildren();
   const previousTask = taskSelect.value;
+  const previousLockTask = lockTaskSelect.value;
   taskSelect.replaceChildren(new Option("General message (no task)", ""));
+  lockTaskSelect.replaceChildren(new Option("No task association", ""));
+  const statuses = globalThis.C2AICoordinationClient.TASK_STATUSES;
+
   for (const task of tasks) {
-    const option = new Option(task.id + " · " + task.title, task.id);
-    taskSelect.append(option);
+    const label = (task.id || "Unknown task") + " · " + (task.title || "Untitled");
+    taskSelect.append(new Option(label, task.id));
+    lockTaskSelect.append(new Option(label, task.id));
+
     const card = document.createElement("article");
     card.className = "coord-task";
     const heading = document.createElement("div");
@@ -66,21 +75,45 @@ function renderCoordinationTasks(tasks) {
     detail.textContent = task.description || "No description provided.";
     const meta = document.createElement("small");
     meta.textContent = task.id + " · " + (task.owner ? "Owned by " + task.owner : "Unclaimed") +
-      (task.branch ? " · " + task.branch : "");
+      (task.branch ? " · " + task.branch : "") +
+      (task.created_by ? " · Created by " + task.created_by : "");
     card.append(heading, detail, meta);
-    if (task.status === "open" || (task.status === "claimed" && task.owner === selectedAgent())) {
+
+    if (task.status === "open") {
       const claim = document.createElement("button");
       claim.type = "button";
       claim.className = "secondary";
-      claim.textContent = task.owner === selectedAgent() ? "Claimed by you" : "Claim task";
-      claim.disabled = task.owner === selectedAgent();
+      claim.textContent = "Claim task";
       claim.addEventListener("click", () => claimCoordinationTask(task.id));
       card.append(claim);
+    } else if (task.status === "claimed" && task.owner === selectedAgent()) {
+      const claimed = document.createElement("small");
+      claimed.className = "coord-owned";
+      claimed.textContent = "Claimed by this agent";
+      card.append(claimed);
+    }
+
+    if (task.owner === selectedAgent() || task.created_by === selectedAgent()) {
+      const controls = document.createElement("div");
+      controls.className = "coord-task-controls";
+      const statusSelect = document.createElement("select");
+      statusSelect.setAttribute("aria-label", "Task status for " + (task.id || ""));
+      for (const value of statuses) statusSelect.append(new Option(value.replace("_", " "), value));
+      statusSelect.value = statuses.includes(task.status) ? task.status : "open";
+      const update = document.createElement("button");
+      update.type = "button";
+      update.className = "secondary compact";
+      update.textContent = "Update";
+      update.addEventListener("click", () => updateCoordinationTask(task, statusSelect.value));
+      controls.append(statusSelect, update);
+      card.append(controls);
     }
     list.append(card);
   }
+
   if ([...taskSelect.options].some(option => option.value === previousTask)) taskSelect.value = previousTask;
-  if (!tasks.length) list.textContent = "No tasks have been created yet.";
+  if ([...lockTaskSelect.options].some(option => option.value === previousLockTask)) lockTaskSelect.value = previousLockTask;
+  if (!tasks.length) list.textContent = "No coordination tasks have been created yet.";
 }
 
 function appendCoordinationMessages(messages) {
@@ -102,39 +135,100 @@ function appendCoordinationMessages(messages) {
   if (!list.children.length) list.textContent = "No coordination messages yet.";
 }
 
+function renderCoordinationLocks(locks) {
+  const list = $("coordLocks");
+  list.replaceChildren();
+  for (const lock of locks) {
+    const item = document.createElement("article");
+    item.className = "coord-lock";
+    const details = document.createElement("div");
+    const path = document.createElement("strong");
+    path.textContent = lock.path;
+    const meta = document.createElement("small");
+    const expiry = Number(lock.expires_at);
+    meta.textContent = "Held by " + lock.agent +
+      (lock.task_id ? " · " + lock.task_id : "") +
+      (Number.isFinite(expiry) ? " · Expires " + new Date(expiry * 1000).toLocaleString() : "");
+    details.append(path, meta);
+    item.append(details);
+
+    const localLease = ownedLocks.find(saved =>
+      saved.path === lock.path && saved.agent === lock.agent && saved.token
+    );
+    if (localLease) {
+      const release = document.createElement("button");
+      release.type = "button";
+      release.className = "secondary compact";
+      release.textContent = "Release";
+      release.addEventListener("click", () => releaseCoordinationLock(localLease));
+      item.append(release);
+    }
+    list.append(item);
+  }
+  if (!locks.length) list.textContent = "No active file locks.";
+}
+
 async function claimCoordinationTask(taskId) {
-  const agent = selectedAgent();
-  const branch = $("coordBranch").value.trim();
-  if (!branch || branch.length > 200) return coordinationStatus("Enter a valid Git branch name before claiming.", true);
   try {
-    await apiRequest("/api/coordination/tasks/" + encodeURIComponent(taskId) + "/claim", {
-      method: "POST",
-      body: JSON.stringify({ agent, branch })
-    });
-    coordinationStatus("Claimed " + taskId + " as " + agent + ".");
+    const task = await coordinationClient.claimTask(taskId, selectedAgent(), $("coordBranch").value.trim());
+    coordinationStatus("Claimed " + task.id + " on " + (task.branch || "the current branch") + ".");
     await loadCoordination();
   } catch (error) { coordinationStatus("Could not claim task: " + error.message, true); }
+}
+
+async function updateCoordinationTask(task, nextStatus) {
+  try {
+    const updated = await coordinationClient.updateTask(
+      task.id, selectedAgent(), nextStatus, $("coordBranch").value.trim()
+    );
+    coordinationStatus("Updated " + updated.id + " to " + updated.status + ".");
+    await loadCoordination();
+  } catch (error) { coordinationStatus("Could not update task: " + error.message, true); }
+}
+
+async function acquireCoordinationLock() {
+  try {
+    const path = $("coordLockPath").value.trim();
+    const taskId = $("coordLockTask").value;
+    const ttl = Number($("coordLockTtl").value);
+    const lock = await coordinationClient.acquireLock(path, selectedAgent(), taskId || null, ttl);
+    ownedLocks = ownedLocks.filter(saved => !(saved.path === lock.path && saved.agent === lock.agent));
+    ownedLocks.push(lock);
+    await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    $("coordLockPath").value = "";
+    coordinationStatus("Locked " + lock.path + " for " + ttl + " seconds. The release token is stored locally.");
+    await loadCoordination();
+  } catch (error) { coordinationStatus("Could not acquire file lock: " + error.message, true); }
+}
+
+async function releaseCoordinationLock(lock) {
+  try {
+    await coordinationClient.releaseLock(lock.path, lock.agent, lock.token);
+    ownedLocks = ownedLocks.filter(saved =>
+      !(saved.path === lock.path && saved.agent === lock.agent && saved.token === lock.token)
+    );
+    await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    coordinationStatus("Released lock for " + lock.path + ".");
+    await loadCoordination();
+  } catch (error) { coordinationStatus("Could not release lock: " + error.message, true); }
 }
 
 async function postCoordinationMessage() {
   const body = $("coordMessage").value.trim();
   if (!body) return coordinationStatus("Write a message first.", true);
   try {
-    const payload = { agent: selectedAgent(), body };
     const taskId = $("coordMessageTask").value;
-    if (taskId) payload.task_id = taskId;
-    const result = await apiRequest("/api/coordination/messages", {
-      method: "POST", body: JSON.stringify(payload)
-    });
+    const message = await coordinationClient.postMessage(selectedAgent(), body, taskId || null);
     $("coordMessage").value = "";
-    if (result.message) appendCoordinationMessages([result.message]);
+    appendCoordinationMessages([message]);
     coordinationStatus("Message posted as " + selectedAgent() + ".");
   } catch (error) { coordinationStatus("Could not post message: " + error.message, true); }
 }
 
 async function initializeCoordination() {
   try {
-    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent", "coordinationBranch"]);
+    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent", "coordinationBranch", "coordinationOwnedLocks"]);
+    ownedLocks = Array.isArray(saved.coordinationOwnedLocks) ? saved.coordinationOwnedLocks : [];
     apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
     $("coordApiBase").value = apiBase;
     $("coordAgent").value = saved.coordinationAgent || "chatgpt";
@@ -164,6 +258,7 @@ async function initializeCoordination() {
   });
   $("coordRefresh").addEventListener("click", loadCoordination);
   $("coordPost").addEventListener("click", postCoordinationMessage);
+  $("coordAcquireLock").addEventListener("click", acquireCoordinationLock);
   $("coordMessage").addEventListener("keydown", event => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) postCoordinationMessage();
   });
