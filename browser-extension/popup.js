@@ -154,7 +154,7 @@ function renderCoordinationLocks(locks) {
 
     const localLease = ownedLocks.find(saved =>
       saved.path === lock.path && saved.agent === lock.agent &&
-      saved.bridge === apiBase && saved.token
+      saved.agent === selectedAgent() && saved.bridge === apiBase && saved.token
     );
     if (localLease) {
       const release = document.createElement("button");
@@ -251,24 +251,50 @@ async function postCoordinationMessage() {
 }
 
 async function initializeCoordination() {
+  let saved = {};
   try {
-    const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent", "coordinationBranch", "coordinationOwnedLocks"]);
-    ownedLocks = Array.isArray(saved.coordinationOwnedLocks) ? saved.coordinationOwnedLocks : [];
-    const nowSeconds = Date.now() / 1000;
-    const activeLocalLocks = ownedLocks.filter(lock => Number(lock.expires_at) > nowSeconds);
-    if (activeLocalLocks.length !== ownedLocks.length) {
-      ownedLocks = activeLocalLocks;
-      await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
-    }
-    apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
-    $("coordApiBase").value = apiBase;
-    $("coordAgent").value = saved.coordinationAgent || "chatgpt";
-    $("coordBranch").value = saved.coordinationBranch || "chatgpt/extension-coordination-ui";
+    saved = await api.storage.local.get([
+      "coordinationApiBase", "coordinationAgent", "coordinationBranch", "coordinationOwnedLocks"
+    ]);
   } catch (error) {
-    apiBase = DEFAULT_API_BASE;
-    $("coordApiBase").value = DEFAULT_API_BASE;
-    coordinationStatus(error.message, true);
+    coordinationStatus("Could not read saved coordination settings: " + error.message, true);
   }
+
+  try {
+    apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
+  } catch (error) {
+    apiBase = coordinationClient.setBase(DEFAULT_API_BASE);
+    coordinationStatus("Saved bridge address was invalid; using the local default. " + error.message, true);
+  }
+
+  const savedAgent = ["chatgpt", "claude"].includes(saved.coordinationAgent)
+    ? saved.coordinationAgent : "chatgpt";
+  const savedBranch = typeof saved.coordinationBranch === "string" &&
+    saved.coordinationBranch.trim().length <= 200
+    ? saved.coordinationBranch : "chatgpt/extension-coordination-ui";
+
+  $("coordApiBase").value = apiBase;
+  $("coordAgent").value = savedAgent;
+  $("coordBranch").value = savedBranch;
+
+  const nowSeconds = Date.now() / 1000;
+  ownedLocks = Array.isArray(saved.coordinationOwnedLocks)
+    ? saved.coordinationOwnedLocks.filter(lock =>
+        lock && typeof lock === "object" &&
+        typeof lock.path === "string" && typeof lock.agent === "string" &&
+        typeof lock.token === "string" && lock.token.length > 0 &&
+        typeof lock.bridge === "string" && Number(lock.expires_at) > nowSeconds
+      )
+    : [];
+  if (Array.isArray(saved.coordinationOwnedLocks) &&
+      ownedLocks.length !== saved.coordinationOwnedLocks.length) {
+    try {
+      await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    } catch (error) {
+      coordinationStatus("Could not clean expired local lock records: " + error.message, true);
+    }
+  }
+
   $("coordSave").addEventListener("click", async () => {
     try {
       const nextBase = normalizeApiBase($("coordApiBase").value);
@@ -284,8 +310,12 @@ async function initializeCoordination() {
     } catch (error) { coordinationStatus("Invalid settings: " + error.message, true); }
   });
   $("coordAgent").addEventListener("change", async () => {
-    await api.storage.local.set({ coordinationAgent: selectedAgent() });
-    await loadCoordination();
+    try {
+      await api.storage.local.set({ coordinationAgent: selectedAgent() });
+      await loadCoordination();
+    } catch (error) {
+      coordinationStatus("Could not save the selected agent: " + error.message, true);
+    }
   });
   $("coordRefresh").addEventListener("click", loadCoordination);
   $("coordPost").addEventListener("click", postCoordinationMessage);
@@ -296,7 +326,6 @@ async function initializeCoordination() {
   await loadCoordination();
   coordinationPoll = setInterval(loadCoordination, 12000);
 }
-
 window.addEventListener("pagehide", () => {
   if (coordinationPoll !== null) clearInterval(coordinationPoll);
 });
