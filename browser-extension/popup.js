@@ -153,7 +153,8 @@ function renderCoordinationLocks(locks) {
     item.append(details);
 
     const localLease = ownedLocks.find(saved =>
-      saved.path === lock.path && saved.agent === lock.agent && saved.token
+      saved.path === lock.path && saved.agent === lock.agent &&
+      saved.bridge === apiBase && saved.token
     );
     if (localLease) {
       const release = document.createElement("button");
@@ -192,12 +193,25 @@ async function acquireCoordinationLock() {
     const taskId = $("coordLockTask").value;
     const ttl = Number($("coordLockTtl").value);
     const lock = await coordinationClient.acquireLock(path, selectedAgent(), taskId || null, ttl);
-    ownedLocks = ownedLocks.filter(saved => !(saved.path === lock.path && saved.agent === lock.agent));
-    ownedLocks.push(lock);
-    await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    const savedLock = { ...lock, bridge: apiBase };
+    ownedLocks = ownedLocks.filter(saved =>
+      !(saved.path === lock.path && saved.agent === lock.agent && saved.bridge === apiBase)
+    );
+    ownedLocks.push(savedLock);
+    let tokenPersisted = true;
+    try {
+      await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    } catch {
+      tokenPersisted = false;
+    }
     $("coordLockPath").value = "";
-    coordinationStatus("Locked " + lock.path + " for " + ttl + " seconds. The release token is stored locally.");
     await loadCoordination();
+    coordinationStatus(
+      tokenPersisted
+        ? "Locked " + lock.path + " for " + ttl + " seconds. The release token is stored locally."
+        : "Lock acquired, but the browser could not save its release token. Keep this popup open and release it before closing; otherwise it expires automatically.",
+      !tokenPersisted
+    );
   } catch (error) { coordinationStatus("Could not acquire file lock: " + error.message, true); }
 }
 
@@ -205,11 +219,22 @@ async function releaseCoordinationLock(lock) {
   try {
     await coordinationClient.releaseLock(lock.path, lock.agent, lock.token);
     ownedLocks = ownedLocks.filter(saved =>
-      !(saved.path === lock.path && saved.agent === lock.agent && saved.token === lock.token)
+      !(saved.path === lock.path && saved.agent === lock.agent &&
+        saved.bridge === apiBase && saved.token === lock.token)
     );
-    await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
-    coordinationStatus("Released lock for " + lock.path + ".");
+    let tokenCleared = true;
+    try {
+      await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    } catch {
+      tokenCleared = false;
+    }
     await loadCoordination();
+    coordinationStatus(
+      tokenCleared
+        ? "Released lock for " + lock.path + "."
+        : "Lock released, but the browser could not clear its stored token.",
+      !tokenCleared
+    );
   } catch (error) { coordinationStatus("Could not release lock: " + error.message, true); }
 }
 
@@ -229,6 +254,12 @@ async function initializeCoordination() {
   try {
     const saved = await api.storage.local.get(["coordinationApiBase", "coordinationAgent", "coordinationBranch", "coordinationOwnedLocks"]);
     ownedLocks = Array.isArray(saved.coordinationOwnedLocks) ? saved.coordinationOwnedLocks : [];
+    const nowSeconds = Date.now() / 1000;
+    const activeLocalLocks = ownedLocks.filter(lock => Number(lock.expires_at) > nowSeconds);
+    if (activeLocalLocks.length !== ownedLocks.length) {
+      ownedLocks = activeLocalLocks;
+      await api.storage.local.set({ coordinationOwnedLocks: ownedLocks });
+    }
     apiBase = coordinationClient.setBase(saved.coordinationApiBase || DEFAULT_API_BASE);
     $("coordApiBase").value = apiBase;
     $("coordAgent").value = saved.coordinationAgent || "chatgpt";
