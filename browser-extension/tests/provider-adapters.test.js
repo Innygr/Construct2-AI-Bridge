@@ -57,3 +57,32 @@ test("manifest keeps the connector on Manifest V3 with narrowly scoped local hos
   assert.ok(manifest.permissions.includes("scripting"));
   assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*", "http://localhost/*"]);
 });
+
+
+test("popup loads the coordination client before using it and includes its controls", () => {
+  const extensionDir = path.resolve(__dirname, "..");
+  const html = fs.readFileSync(path.join(extensionDir, "popup.html"), "utf8");
+  const popup = fs.readFileSync(path.join(extensionDir, "popup.js"), "utf8");
+  const client = fs.readFileSync(path.join(extensionDir, "coordination-client.js"), "utf8");
+
+  assert.ok(html.indexOf('src="coordination-client.js"') >= 0);
+  assert.ok(html.indexOf('src="coordination-client.js"') < html.indexOf('src="popup.js"'));
+  for (const id of [
+    "coordApiBase", "coordAgent", "coordBranch", "coordTasks",
+    "coordLockPath", "coordLockTask", "coordLockTtl",
+    "coordAcquireLock", "coordLocks", "coordMessageTask", "coordMessage", "coordPost"
+  ]) {
+    assert.match(html, new RegExp('id="' + id + '"'));
+  }
+
+  for (const method of [
+    "listTasks", "claimTask", "updateTask", "listMessages",
+    "postMessage", "listLocks", "acquireLock", "releaseLock"
+  ]) {
+    assert.match(client, new RegExp("\\\\b" + method + "\\\\s*\\\\("));
+  }
+  assert.match(popup, /coordinationClient\\.updateTask\\s*\\(/);
+  assert.match(popup, /coordinationClient\\.acquireLock\\s*\\(/);
+  assert.match(popup, /coordinationClient\\.releaseLock\\s*\\(/);
+  assert.match(popup, /saved\\.bridge\\s*===\\s*apiBase/);
+});
