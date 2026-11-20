@@ -125,5 +125,5 @@ test("lock helpers keep list tokens private and use exact release payloads", asy
   assert.deepEqual(JSON.parse(calls[2].options.body), {
     path: "src/parser.py", agent: "chatgpt", token: "private-token"
   });
-  await assert.rejects(client.acquireLock("src/a.py", "chatgpt", null, 10), /30 and 86400/);
+  await assert.rejects(client.acquireLock("src/a.py", "chatgpt", null, 10), /30 to 86400/);
 });
