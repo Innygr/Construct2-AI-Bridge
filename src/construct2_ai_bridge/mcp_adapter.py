@@ -20,6 +20,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from .mcp_analysis_tools import register as _register_analysis_tools
+
 API_BASE = os.environ.get("C2AB_API_URL", "http://127.0.0.1:8765").rstrip("/")
 HTTP_HOST = "127.0.0.1"
 HTTP_PORT = 8766
@@ -54,6 +56,10 @@ def _request(path: str, *, method: str = "GET", payload: dict[str, Any] | None =
     if not isinstance(result, dict):
         raise BridgeApiError("Bridge API returned an unexpected response.")
     return result
+
+
+# Read-only analysis tools (explain_events, lint_project) built from /api/events and /api/objects.
+_register_analysis_tools(mcp, _request)
 
 
 @mcp.tool()
