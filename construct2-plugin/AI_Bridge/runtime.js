@@ -192,15 +192,24 @@ cr.plugins_.AIBridge = function(runtime)
 	{
 		var self = this;
 		var xhr = new XMLHttpRequest();
+		var retryQueued = false;
 		function scheduleRetry()
 		{
-			if (!self._browserAIRequests[requestID]) return;
+			if (retryQueued || !self._browserAIRequests[requestID]) return;
+			retryQueued = true;
 			if (Date.now() - startedAt > 600000)
 			{
 				delete self._browserAIRequests[requestID];
 				self.lastRequestID = requestID;
 				self.lastTag = tag;
 				self.lastError = "Timed out waiting for the browser AI reply. Check the browser connector and try again.";
+				try
+				{
+					var cancelXHR = new XMLHttpRequest();
+					cancelXHR.open("POST", self.baseURL + "/api/ai/requests/" + encodeURIComponent(requestID) + "/cancel", true);
+					cancelXHR.send();
+				}
+				catch (cancelError) {}
 				self._trigger(pluginProto.cnds.OnError);
 				return;
 			}
