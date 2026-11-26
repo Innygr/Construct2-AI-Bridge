@@ -205,6 +205,20 @@ def test_browser_ai_request_relay_round_trip(tmp_path: Path, monkeypatch) -> Non
     assert result.json()["request"]["response"] == "Check that the movement action runs every tick."
 
 
+def test_browser_ai_request_store_persists_across_instances(tmp_path: Path) -> None:
+    from construct2_ai_bridge.relay import AIRequestStore
+
+    database = tmp_path / "persistent-relay.sqlite3"
+    first_store = AIRequestStore(database)
+    created = first_store.create("gemini", "Explain this event.", "")
+    reopened_store = AIRequestStore(database)
+    restored = reopened_store.get(created["id"])
+
+    assert restored["status"] == "pending"
+    assert restored["prompt"] == "Explain this event."
+    assert restored["provider"] == "gemini"
+
+
 def test_browser_ai_request_relay_rejects_wrong_client_and_supports_cancel(
     tmp_path: Path, monkeypatch
 ) -> None:
