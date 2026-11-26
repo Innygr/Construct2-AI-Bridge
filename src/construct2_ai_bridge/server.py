@@ -16,7 +16,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from . import __version__
 from .project_reader import MAX_XML_BYTES, ProjectReadError, _parse_xml, inspect_project, load_project
-from .coordination import CoordinationError, CoordinationStore\nfrom .relay import AIRequestError, AIRequestStore
+from .coordination import CoordinationError, CoordinationStore
+from .relay import AIRequestError, AIRequestStore
 
 app = FastAPI(title="Construct 2 AI Bridge", version=__version__)
 
@@ -32,7 +33,8 @@ app.add_middleware(
 )
 _current_summary: dict[str, Any] | None = None
 _current_document = None
-_coordination = CoordinationStore()\n_ai_requests = AIRequestStore()
+_coordination = CoordinationStore()
+_ai_requests = AIRequestStore()
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
