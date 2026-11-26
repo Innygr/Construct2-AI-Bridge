@@ -308,6 +308,7 @@ cr.plugins_.AIBridge = function(runtime)
 	Cnds.prototype.OnProjectOpened = function() { return true; };
 	Cnds.prototype.OnContextReady = function() { return true; };
 	Cnds.prototype.OnOllamaStatus = function() { return true; };
+	Cnds.prototype.OnAIResponse = function(tag) { return cr.equals_nocase(tag, this.lastTag); };
 	Cnds.prototype.IsConnected = function() { return this.connected; };
 	pluginProto.cnds = new Cnds();
 
@@ -443,5 +444,6 @@ cr.plugins_.AIBridge = function(runtime)
 	Exps.prototype.OllamaModels = function(ret) { ret.set_string(this.ollamaModels); };
 	Exps.prototype.ProjectSHA256 = function(ret) { ret.set_string(this.projectSHA256); };
 	Exps.prototype.SelectedModel = function(ret) { ret.set_string(this.selectedModel); };
+	Exps.prototype.RequestTag = function(ret) { ret.set_string(this.lastTag); };
 	pluginProto.exps = new Exps();
 }());
