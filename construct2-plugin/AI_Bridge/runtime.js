@@ -37,6 +37,7 @@ cr.plugins_.AIBridge = function(runtime)
 		this.selectedModel = "";
 		this._nextRequestID = 1;
 		this._requests = [];
+		this._browserAIRequests = {};
 	};
 
 	var instanceProto = pluginProto.Instance.prototype;
@@ -50,6 +51,7 @@ cr.plugins_.AIBridge = function(runtime)
 	instanceProto.onDestroy = function()
 	{
 		this.cancelRequests(false);
+		this.cancelBrowserAIRequests();
 	};
 
 	instanceProto.saveToJSON = function()
@@ -73,6 +75,7 @@ cr.plugins_.AIBridge = function(runtime)
 		this.lastRequestID = "";
 		this.ollamaModels = "[]";
 		this.selectedModel = "";
+		this._browserAIRequests = {};
 	};
 
 	instanceProto._normalizeBaseURL = function(value)
@@ -184,6 +187,106 @@ cr.plugins_.AIBridge = function(runtime)
 		}
 	};
 
+
+	instanceProto._pollBrowserAIRequest = function(requestID, tag, startedAt)
+	{
+		var self = this;
+		var xhr = new XMLHttpRequest();
+		function scheduleRetry()
+		{
+			if (!self._browserAIRequests[requestID]) return;
+			if (Date.now() - startedAt > 600000)
+			{
+				delete self._browserAIRequests[requestID];
+				self.lastRequestID = requestID;
+				self.lastTag = tag;
+				self.lastError = "Timed out waiting for the browser AI reply. Check the browser connector and try again.";
+				self._trigger(pluginProto.cnds.OnError);
+				return;
+			}
+			self._browserAIRequests[requestID].timer = window.setTimeout(function()
+			{
+				self._pollBrowserAIRequest(requestID, tag, startedAt);
+			}, 1800);
+		}
+		try
+		{
+			xhr.open("GET", this.baseURL + "/api/ai/requests/" + encodeURIComponent(requestID), true);
+			xhr.timeout = 12000;
+			xhr.setRequestHeader("Accept", "application/json");
+			xhr.onreadystatechange = function()
+			{
+				if (xhr.readyState !== 4) return;
+				if (xhr.status < 200 || xhr.status >= 300)
+				{
+					scheduleRetry();
+					return;
+				}
+				var data = window.C2AIBridge ? window.C2AIBridge.safeJSON(xhr.responseText || "") : null;
+				var item = data && data.request;
+				if (!item)
+				{
+					scheduleRetry();
+					return;
+				}
+				if (item.status === "pending" || item.status === "claimed")
+				{
+					scheduleRetry();
+					return;
+				}
+				delete self._browserAIRequests[requestID];
+				self.lastRequestID = requestID;
+				self.lastTag = tag;
+				if (item.status === "completed")
+				{
+					self.lastResponse = item.response || "";
+					self.lastError = "";
+					self.selectedModel = "browser:" + (item.claimed_provider || item.provider || "unknown");
+					self._trigger(pluginProto.cnds.OnAIResponse);
+					self._trigger(pluginProto.cnds.OnRequestComplete);
+				}
+				else
+				{
+					self.lastError = item.error || ("Browser AI request ended with status: " + item.status);
+					self._trigger(pluginProto.cnds.OnError);
+				}
+			};
+			xhr.onerror = scheduleRetry;
+			xhr.ontimeout = scheduleRetry;
+			xhr.send();
+		}
+		catch (e)
+		{
+			scheduleRetry();
+		}
+	};
+
+	instanceProto.cancelBrowserAIRequests = function()
+	{
+		var ids = [];
+		var id;
+		for (id in this._browserAIRequests)
+		{
+			if (this._browserAIRequests.hasOwnProperty(id))
+			{
+				ids.push(id);
+				if (this._browserAIRequests[id].timer)
+					window.clearTimeout(this._browserAIRequests[id].timer);
+				}
+			}
+		this._browserAIRequests = {};
+		for (var i = 0; i < ids.length; i++)
+		{
+			try
+			{
+				var xhr = new XMLHttpRequest();
+				xhr.open("POST", this.baseURL + "/api/ai/requests/" + encodeURIComponent(ids[i]) + "/cancel", true);
+				xhr.send();
+			}
+			catch (e) {}
+		}
+	};
+
 	instanceProto.getDebuggerValues = function(propsections)
 	{
 		propsections.push({
@@ -290,9 +393,44 @@ cr.plugins_.AIBridge = function(runtime)
 			self.selectedModel = data.model || self.selectedModel;
 		}, 300000);
 	};
+	Acts.prototype.SendToBrowserAI = function(tag, providerIndex, prompt, system, includeContext)
+	{
+		var self = this;
+		var providers = ["any", "chatgpt", "claude", "gemini"];
+		var provider = providers[providerIndex] || "any";
+		var message = String(prompt || "");
+		if (includeContext && this.projectContext)
+			message += "\n\nPROJECT CONTEXT (from the local Construct 2 AI Bridge):\n" + this.projectContext;
+		if (!message)
+		{
+			this.lastTag = String(tag || "");
+			this.lastError = "A prompt is required.";
+			this._trigger(pluginProto.cnds.OnError);
+			return;
+		}
+		this._request("POST", "/api/ai/requests", {
+			"provider": provider,
+			"prompt": message,
+			"system": String(system || "")
+		}, tag, function(data)
+		{
+			var requestID = data.request && data.request.id;
+			if (!requestID)
+			{
+				self.lastError = "The bridge did not return an AI request ID.";
+				self._trigger(pluginProto.cnds.OnError);
+				return;
+			}
+			self.lastRequestID = requestID;
+			self.lastTag = String(tag || "");
+			self._browserAIRequests[requestID] = {"tag": String(tag || ""), "timer": null};
+			self._pollBrowserAIRequest(requestID, String(tag || ""), Date.now());
+		}, 30000);
+	};
 	Acts.prototype.CancelRequests = function()
 	{
 		this.cancelRequests(true);
+		this.cancelBrowserAIRequests();
 	};
 	pluginProto.acts = new Acts();
 
