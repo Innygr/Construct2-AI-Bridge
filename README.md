@@ -21,7 +21,7 @@ On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open h
 
 ## Construct 2 SDK plugin (preview)
 
-The first Construct 2 plugin implementation is in [construct2-plugin/AI_Bridge](construct2-plugin/AI_Bridge/), with Wine installation instructions in [construct2-plugin/README.md](construct2-plugin/README.md). It connects to the loopback companion, opens project files, retrieves AI context, checks local Ollama, and submits prompts to local Ollama models. Hosted ChatGPT, Claude, and Gemini remain part of the separate browser-extension workflow.
+The Construct 2 plugin is in [construct2-plugin/AI_Bridge](construct2-plugin/AI_Bridge/), with Wine installation instructions in [construct2-plugin/README.md](construct2-plugin/README.md). It connects to the loopback companion, opens projects, retrieves AI context, calls local Ollama, and queues prompts for ChatGPT, Claude, or Gemini through the browser-extension request inbox. The browser relay uses your normal signed-in website session without a provider API key; you review and submit prompts yourself, then explicitly return the visible answer.
 
 ## Browser-based AI without API keys
 See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. The browser extension remains user-supervised for hosted AI providers: it prepares prompts and captures visible replies. Project edits are reviewed and applied through the local bridge editor.
@@ -76,6 +76,15 @@ Example task creation body: `{"title":"Improve event parsing","description":"Add
 - GET /api/objects — object types, families, and global variables.
 - GET /api/events — event-sheet names, lightweight XML-derived counts, and bounded event outlines with `event_id` / `event_index` references and condition/action parameter details where detectable. Outlines are heuristic and may not map every Construct 2 version's event format.
 - GET /api/ai-context — returns a bounded JSON context string designed to paste into an AI chat. Optional repeated `event_ids` parameters focus the context on selected events; `max_chars` accepts 1,000–40,000 characters. Unknown event IDs return HTTP 400. Nothing is sent to an AI provider automatically.
+- POST /api/ai/requests — queue a prompt for a browser provider (any, chatgpt, claude, or gemini).
+- GET /api/ai/requests?client_id=... — list pending requests and requests claimed by this browser connector.
+- GET /api/ai/requests/{request_id} — retrieve request state and, once completed, its response.
+- POST /api/ai/requests/{request_id}/claim — claim a request for one browser client/provider.
+- POST /api/ai/requests/{request_id}/complete — return a user-captured assistant response.
+- POST /api/ai/requests/{request_id}/fail — report a user-visible connector error.
+- POST /api/ai/requests/{request_id}/cancel — cancel a queued or claimed request.
+
+The browser relay queue is stored in the same local SQLite database as coordination. It is a mailbox, not direct access to provider APIs: the extension fills the selected site's composer, the user presses Send, and the user explicitly returns the visible answer.
 
 Keep the service local and only use trusted project files.
 
@@ -88,7 +97,8 @@ Keep the service local and only use trusted project files.
 6. A5 — MCP adapter for compatible AI clients.
 7. A6 — tests and documentation using sanitized sample projects.
 8. B0 — one-command companion window launch (`construct2-ai-bridge --window`).
-9. B1 — build and validate a Construct 2 SDK plugin that connects to the companion (preview implementation available).\n10. B2 — investigate a safe companion-launch workflow; do not rely on undocumented editor DOM hooks for a docked panel.
+9. B1 — Construct 2 SDK plugin plus supervised browser AI relay (preview implementation available).
+10. B2 — investigate a safe companion-launch workflow; do not rely on undocumented editor DOM hooks for a docked panel.
 
 ## Safety and limitations
 - Project writes are limited to explicitly approved XML documents. Each write validates the XML, checks a project hash to reject stale edits, creates a numbered backup, validates a temporary replacement, and uses atomic replacement. The bridge does not execute project content.
