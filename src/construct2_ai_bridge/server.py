@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from . import __version__
 from .project_reader import MAX_XML_BYTES, ProjectReadError, _parse_xml, inspect_project, load_project
-from .coordination import CoordinationError, CoordinationStore
+from .coordination import CoordinationError, CoordinationStore\nfrom .relay import AIRequestError, AIRequestStore
 
 app = FastAPI(title="Construct 2 AI Bridge", version=__version__)
 
@@ -32,7 +32,7 @@ app.add_middleware(
 )
 _current_summary: dict[str, Any] | None = None
 _current_document = None
-_coordination = CoordinationStore()
+_coordination = CoordinationStore()\n_ai_requests = AIRequestStore()
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
@@ -120,6 +120,28 @@ def ollama_chat(request: OllamaChatRequest) -> dict[str, Any]:
 
 
 
+class BrowserAIRequestCreate(BaseModel):
+    provider: str = Field(default="any", pattern=r"^(any|chatgpt|claude|gemini)$")
+    prompt: str = Field(min_length=1, max_length=300000)
+    system: str = Field(default="", max_length=8000)
+
+
+class BrowserAIRequestClaim(BaseModel):
+    client_id: str = Field(min_length=8, max_length=128)
+    provider: str = Field(pattern=r"^(chatgpt|claude|gemini)$")
+
+
+class BrowserAIRequestComplete(BaseModel):
+    client_id: str = Field(min_length=8, max_length=128)
+    provider: str = Field(pattern=r"^(chatgpt|claude|gemini)$")
+    response: str = Field(min_length=1, max_length=300000)
+
+
+class BrowserAIRequestFail(BaseModel):
+    client_id: str = Field(min_length=8, max_length=128)
+    error: str = Field(min_length=1, max_length=4000)
+
+
 class CoordinationTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=12000)
@@ -154,6 +176,58 @@ class CoordinationLockRelease(BaseModel):
     path: str = Field(min_length=1, max_length=1024)
     agent: str = Field(min_length=1, max_length=80)
     token: str = Field(min_length=1, max_length=64)
+
+
+def _ai_request_call(callback, *args, **kwargs):
+    try:
+        return callback(*args, **kwargs)
+    except AIRequestError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.post("/api/ai/requests")
+def create_browser_ai_request(request: BrowserAIRequestCreate) -> dict[str, Any]:
+    created = _ai_request_call(_ai_requests.create, request.provider, request.prompt, request.system)
+    return {"request": created}
+
+
+@app.get("/api/ai/requests")
+def list_browser_ai_requests(
+    client_id: str = Query(default="", max_length=128),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    return {"requests": _ai_requests.list_pending(client_id, limit)}
+
+
+@app.get("/api/ai/requests/{request_id}")
+def get_browser_ai_request(request_id: str) -> dict[str, Any]:
+    return {"request": _ai_request_call(_ai_requests.get, request_id)}
+
+
+@app.post("/api/ai/requests/{request_id}/claim")
+def claim_browser_ai_request(request_id: str, request: BrowserAIRequestClaim) -> dict[str, Any]:
+    claimed = _ai_request_call(_ai_requests.claim, request_id, request.client_id, request.provider)
+    return {"request": claimed}
+
+
+@app.post("/api/ai/requests/{request_id}/complete")
+def complete_browser_ai_request(request_id: str, request: BrowserAIRequestComplete) -> dict[str, Any]:
+    completed = _ai_request_call(
+        _ai_requests.complete, request_id, request.client_id, request.provider, request.response
+    )
+    return {"request": completed}
+
+
+@app.post("/api/ai/requests/{request_id}/fail")
+def fail_browser_ai_request(request_id: str, request: BrowserAIRequestFail) -> dict[str, Any]:
+    failed = _ai_request_call(_ai_requests.fail, request_id, request.client_id, request.error)
+    return {"request": failed}
+
+
+@app.post("/api/ai/requests/{request_id}/cancel")
+def cancel_browser_ai_request(request_id: str) -> dict[str, Any]:
+    cancelled = _ai_request_call(_ai_requests.cancel, request_id)
+    return {"request": cancelled}
 
 
 def _coordination_call(callback, *args, **kwargs):
