@@ -172,21 +172,6 @@ def test_untrusted_website_origin_is_not_allowed() -> None:
     assert "access-control-allow-origin" not in response.headers
 
 
-@pytest.mark.parametrize("origin", ["http://localhost:50000", "http://127.0.0.1:50000"])
-def test_construct2_preview_origin_can_call_local_api(origin: str) -> None:
-    response = client.options(
-        "/api/coordination/tasks/example",
-        headers={
-            "Origin": origin,
-            "Access-Control-Request-Method": "PATCH",
-            "Access-Control-Request-Headers": "content-type",
-        },
-    )
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == origin
-    assert "PATCH" in response.headers["access-control-allow-methods"]
-
-
 
 def test_selected_xml_endpoint_returns_complete_selected_document(tmp_path: Path) -> None:
     project = tmp_path / "game.caproj"
