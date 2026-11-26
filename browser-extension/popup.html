@@ -20,6 +20,13 @@
 <div class="subheading">Message feed</div><div id="coordMessages" class="coord-list message-list">No coordination messages yet.</div>
 <p id="coordStatus" class="coord-status" role="status">Connecting…</p>
 </section>
+<section class="relay-panel" aria-labelledby="relayHeading">
+<h2 id="relayHeading">Construct 2 request inbox</h2>
+<p class="hint">Prompts submitted by the Construct 2 plugin appear here. Load one into a signed-in AI tab, submit it yourself, then return the visible answer.</p>
+<div class="row"><strong class="subheading">Incoming requests</strong><button id="relayRefresh" class="secondary compact" type="button">Refresh</button></div>
+<div id="relayRequests" class="coord-list relay-list" aria-live="polite">Checking for Construct 2 requests…</div>
+<p id="relayStatus" class="coord-status" role="status">Waiting for requests.</p>
+</section>
 <label for="provider">Active AI website</label><input id="provider" readonly value="Checking active tab…" aria-live="polite">
 <label>Event sheets to include</label><div class="row"><button id="fetch">Load project / event sheets</button><button id="selectAll" class="secondary">Select all</button></div><div id="sheets" class="sheets"><span class="hint">Load a project to choose event sheets.</span></div><details><summary>Project overview</summary><textarea id="project" rows="3" readonly placeholder="Project overview appears here."></textarea></details>
 <label for="mode">Collaboration mode</label><select id="mode"><option value="parallel">Parallel analysis — independent opinions</option><option value="review">Review — critique another AI's proposal</option><option value="synthesis">Synthesis — reconcile both responses</option></select>
