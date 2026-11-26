@@ -3,7 +3,7 @@
 A local, provider-independent bridge for inspecting Construct 2 projects and helping AI tools reason about them. It works alongside Construct 2 rather than patching the retired editor.
 
 ## Status
-Phase A foundation with read/write XML project integration, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, reviewed XML editing with automatic backups and atomic writes, XML-based project summaries and detection diagnostics, and an experimental browser extension for user-supervised AI workflows. A GitHub Actions workflow runs the Python test suite on pushes and pull requests, including API endpoint regression tests.
+Phase A foundation with read/write XML project integration, early development. Includes a local API, browser interface, CAPX ZIP inspection with bounded XML reads, reviewed XML editing with automatic backups and atomic writes, XML-based project summaries and detection diagnostics, an experimental browser extension for user-supervised AI workflows, and an early Construct 2 SDK plugin for calling the local companion service. A GitHub Actions workflow runs the Python test suite, browser adapter tests, and Construct 2 plugin JavaScript syntax checks.
 
 ## Requirements
 - Python 3.10+
@@ -18,6 +18,10 @@ Phase A foundation with read/write XML project integration, early development. I
 To launch the interface in a separate browser window once the local service is ready, run `construct2-ai-bridge --window`. You can also set a custom local port with `--port 8766`; the interface stays bound to loopback only.
 
 On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`. Then open http://127.0.0.1:8765.
+
+## Construct 2 SDK plugin (preview)
+
+The first Construct 2 plugin implementation is in [construct2-plugin/AI_Bridge](construct2-plugin/AI_Bridge/), with Wine installation instructions in [construct2-plugin/README.md](construct2-plugin/README.md). It connects to the loopback companion, opens project files, retrieves AI context, checks local Ollama, and submits prompts to local Ollama models. Hosted ChatGPT, Claude, and Gemini remain part of the separate browser-extension workflow.
 
 ## Browser-based AI without API keys
 See [browser-extension/README.md](browser-extension/README.md). The extension targets ChatGPT, Claude, and Gemini, with planned desktop-browser coverage for Firefox, Opera GX, Microsoft Edge, Google Chrome, and Brave. Firefox is the primary target; Chromium-browser compatibility is intended but must be verified in each browser. Use ChatGPT and Claude in their normal logged-in tabs. Multi-AI modes include independent parallel analysis, cross-review, and synthesis. The browser extension remains user-supervised for hosted AI providers: it prepares prompts and captures visible replies. Project edits are reviewed and applied through the local bridge editor.
@@ -84,7 +88,7 @@ Keep the service local and only use trusted project files.
 6. A5 — MCP adapter for compatible AI clients.
 7. A6 — tests and documentation using sanitized sample projects.
 8. B0 — one-command companion window launch (`construct2-ai-bridge --window`).
-9. B1 — build and validate a Construct 2 SDK plugin that can launch the companion; do not rely on undocumented editor DOM hooks for a docked panel.
+9. B1 — build and validate a Construct 2 SDK plugin that connects to the companion (preview implementation available).\n10. B2 — investigate a safe companion-launch workflow; do not rely on undocumented editor DOM hooks for a docked panel.
 
 ## Safety and limitations
 - Project writes are limited to explicitly approved XML documents. Each write validates the XML, checks a project hash to reject stale edits, creates a numbered backup, validates a temporary replacement, and uses atomic replacement. The bridge does not execute project content.
