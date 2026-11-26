@@ -25,7 +25,8 @@ AddCondition(4, cf_trigger, "On project opened", "Project", "On project opened",
 AddCondition(5, cf_trigger, "On context ready", "Project", "On AI context ready", "Triggered after project context has been retrieved.", "OnContextReady");
 AddCondition(6, cf_trigger, "On Ollama status", "Ollama", "On Ollama status received", "Triggered after the local Ollama status has been checked.", "OnOllamaStatus");
 AddCondition(7, cf_none, "Is connected", "Connection", "Is connected", "True when the local bridge has responded successfully.", "IsConnected");
-AddCondition(8, cf_trigger, "On AI response", "Browser AI", "On browser AI response", "Triggered when the browser connector returns the AI response to this request.", "OnAIResponse");
+AddStringParam("Tag", "Tag used when the browser AI request was created.", '""');
+AddCondition(8, cf_trigger, "On AI response", "Browser AI", "On browser AI response <b>{0}</b>", "Triggered when the browser connector returns the tagged AI response.", "OnAIResponse");
 
 // Actions
 AddStringParam("Base URL", "Loopback URL of the local bridge. Only localhost, 127.0.0.1 and ::1 are accepted.", '"http://127.0.0.1:8765"');
@@ -70,6 +71,7 @@ AddExpression(5, ef_return_string, "Ollama models", "Ollama", "OllamaModels", "G
 AddExpression(6, ef_return_string, "Project SHA-256", "Project", "ProjectSHA256", "Get the hash returned when the project was opened.");
 AddExpression(7, ef_return_string, "Selected model", "Ollama", "SelectedModel", "Get the model used by the last Ollama request.");
 AddExpression(8, ef_return_string, "AI response", "Browser AI", "AIResponse", "Get the latest response returned through the browser connector.");
+AddExpression(9, ef_return_string, "Request tag", "Results", "RequestTag", "Get the tag associated with the latest response or error.");
 
 ACESDone();
 
