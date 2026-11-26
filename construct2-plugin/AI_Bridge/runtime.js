@@ -225,7 +225,7 @@ cr.plugins_.AIBridge = function(runtime)
 			xhr.setRequestHeader("Accept", "application/json");
 			xhr.onreadystatechange = function()
 			{
-				if (xhr.readyState !== 4) return;
+				if (xhr.readyState !== 4 || !self._browserAIRequests[requestID]) return;
 				if (xhr.status < 200 || xhr.status >= 300)
 				{
 					scheduleRetry();
