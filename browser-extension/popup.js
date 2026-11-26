@@ -342,10 +342,9 @@ function relayStatus(message, bad = false) {
 }
 
 async function relayFetch(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
-  });
+  const headers = { ...(options.headers || {}) };
+  if (typeof options.body !== "undefined") headers["Content-Type"] = "application/json";
+  const response = await fetch(apiUrl(path), { ...options, headers });
   const data = await response.json();
   if (!response.ok) {
     const detail = data.detail;
