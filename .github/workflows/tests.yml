@@ -32,5 +32,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Run browser adapter tests
         run: node --test browser-extension/tests/*.test.js
+      - name: Check Construct 2 plugin JavaScript syntax
+        run: node --check construct2-plugin/AI_Bridge/common.js && node --check construct2-plugin/AI_Bridge/edittime.js && node --check construct2-plugin/AI_Bridge/runtime.js
       - name: Run Python tests
         run: python -m pytest -q
