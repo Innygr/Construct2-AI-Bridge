@@ -163,6 +163,76 @@ def test_extension_origin_can_call_local_api() -> None:
     )
 
 
+def test_browser_ai_request_relay_round_trip(tmp_path: Path, monkeypatch) -> None:
+    from construct2_ai_bridge.relay import AIRequestStore
+
+    monkeypatch.setattr(server, "_ai_requests", AIRequestStore(tmp_path / "relay.sqlite3"))
+    created = client.post("/api/ai/requests", json={
+        "provider": "chatgpt",
+        "prompt": "Explain why my player does not move.",
+        "system": "Be concise.",
+    })
+    assert created.status_code == 200
+    request_id = created.json()["request"]["id"]
+    assert created.json()["request"]["status"] == "pending"
+
+    client_id = "test-browser-client-001"
+    queued = client.get("/api/ai/requests", params={"client_id": client_id})
+    assert queued.status_code == 200
+    assert queued.json()["requests"][0]["prompt"] == "Explain why my player does not move."
+
+    wrong_provider = client.post(f"/api/ai/requests/{request_id}/claim", json={
+        "client_id": client_id, "provider": "claude",
+    })
+    assert wrong_provider.status_code == 409
+
+    claimed = client.post(f"/api/ai/requests/{request_id}/claim", json={
+        "client_id": client_id, "provider": "chatgpt",
+    })
+    assert claimed.status_code == 200
+    assert claimed.json()["request"]["status"] == "claimed"
+
+    completed = client.post(f"/api/ai/requests/{request_id}/complete", json={
+        "client_id": client_id,
+        "provider": "chatgpt",
+        "response": "Check that the movement action runs every tick.",
+    })
+    assert completed.status_code == 200
+    assert completed.json()["request"]["status"] == "completed"
+
+    result = client.get(f"/api/ai/requests/{request_id}")
+    assert result.status_code == 200
+    assert result.json()["request"]["response"] == "Check that the movement action runs every tick."
+
+
+def test_browser_ai_request_relay_rejects_wrong_client_and_supports_cancel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from construct2_ai_bridge.relay import AIRequestStore
+
+    monkeypatch.setattr(server, "_ai_requests", AIRequestStore(tmp_path / "relay.sqlite3"))
+    created = client.post("/api/ai/requests", json={
+        "provider": "any", "prompt": "Review this event sheet.",
+    })
+    request_id = created.json()["request"]["id"]
+
+    wrong_owner = client.post(f"/api/ai/requests/{request_id}/claim", json={
+        "client_id": "browser-client-0001", "provider": "gemini",
+    })
+    assert wrong_owner.status_code == 200
+
+    rejected = client.post(f"/api/ai/requests/{request_id}/complete", json={
+        "client_id": "different-client-0002",
+        "provider": "gemini",
+        "response": "Not the owner.",
+    })
+    assert rejected.status_code == 409
+
+    cancelled = client.post(f"/api/ai/requests/{request_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["request"]["status"] == "cancelled"
+
+
 def test_untrusted_website_origin_is_not_allowed() -> None:
     response = client.get(
         "/api/status",
