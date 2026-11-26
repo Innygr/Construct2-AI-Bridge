@@ -461,8 +461,18 @@ async function loadRelayRequestIntoTab(item) {
     const prompt = claimed.system
       ? claimed.system + "\n\n" + claimed.prompt
       : claimed.prompt;
+    let baseline = "";
+    try {
+      const previousReply = await captureActiveAIReply();
+      baseline = previousReply.text;
+    } catch {
+      // A new chat may not have an assistant reply yet; an empty baseline is valid.
+    }
     await fillActiveAIComposer(prompt, claimed.claimed_provider || connector.id);
-    await api.storage.local.set({ aiRelayActiveRequestId: claimed.id });
+    await api.storage.local.set({
+      aiRelayActiveRequestId: claimed.id,
+      aiRelayBaseline: baseline
+    });
     relayStatus("Prompt inserted into " + connector.label + ". Review it and press Send on the AI website; nothing was submitted automatically.");
     await loadRelayRequests();
   } catch (error) {
@@ -473,6 +483,12 @@ async function loadRelayRequestIntoTab(item) {
 async function returnRelayReply(item) {
   try {
     const captured = await captureActiveAIReply();
+    const saved = await api.storage.local.get(["aiRelayActiveRequestId", "aiRelayBaseline"]);
+    if (saved.aiRelayActiveRequestId === item.id &&
+        typeof saved.aiRelayBaseline === "string" &&
+        captured.text === saved.aiRelayBaseline) {
+      throw new Error("No new assistant reply detected yet. Submit the prompt and wait for the answer to finish.");
+    }
     const provider = item.claimed_provider || captured.provider;
     if (captured.provider !== provider) {
       throw new Error("The active tab is " + captured.provider + ", but this request belongs to " + provider + ".");
@@ -486,7 +502,7 @@ async function returnRelayReply(item) {
       })
     });
     $("reply").value = captured.text;
-    await api.storage.local.remove("aiRelayActiveRequestId");
+    await api.storage.local.remove(["aiRelayActiveRequestId", "aiRelayBaseline"]);
     relayStatus("Reply returned to Construct 2. The plugin will receive it automatically.");
     await loadRelayRequests();
   } catch (error) {
