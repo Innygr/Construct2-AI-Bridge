@@ -252,7 +252,6 @@ cr.plugins_.AIBridge = function(runtime)
 					self.lastError = "";
 					self.selectedModel = "browser:" + (item.claimed_provider || item.provider || "unknown");
 					self._trigger(pluginProto.cnds.OnAIResponse);
-					self._trigger(pluginProto.cnds.OnRequestComplete);
 				}
 				else
 				{
