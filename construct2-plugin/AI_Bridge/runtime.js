@@ -136,7 +136,7 @@ cr.plugins_.AIBridge = function(runtime)
 				xhr.setRequestHeader("Content-Type", "application/json");
 			xhr.onreadystatechange = function()
 			{
-				if (xhr.readyState !== 4 || completed) return;
+				if (xhr.readyState !== 4 || completed || xhr._c2aiSilentAbort) return;
 				var raw = xhr.responseText || "";
 				var data = window.C2AIBridge ? window.C2AIBridge.safeJSON(raw) : null;
 				if (xhr.status >= 200 && xhr.status < 300)
@@ -155,7 +155,7 @@ cr.plugins_.AIBridge = function(runtime)
 			};
 			xhr.onerror = function() { finishError("Could not reach the local bridge. Check that it is running and that Construct 2 preview uses localhost or 127.0.0.1."); };
 			xhr.ontimeout = function() { finishError("The request timed out."); };
-			xhr.onabort = function() { finishError("The request was cancelled."); };
+			xhr.onabort = function() { if (xhr._c2aiSilentAbort) completed = true; else finishError("The request was cancelled."); };
 			if (body !== null && typeof body !== "undefined")
 				xhr.send(JSON.stringify(body));
 			else
@@ -174,6 +174,7 @@ cr.plugins_.AIBridge = function(runtime)
 		this._requests = [];
 		for (var i = 0; i < pending.length; i++)
 		{
+			pending[i]._c2aiSilentAbort = true;
 			try { pending[i].abort(); } catch (e) {}
 		}
 		if (raiseEvents && pending.length)
