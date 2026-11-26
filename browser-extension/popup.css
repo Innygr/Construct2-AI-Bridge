@@ -34,3 +34,13 @@
 .coord-lock small{font-size:10px;color:#aaa4c5;margin-top:3px}
 .coord-lock button{flex:0 0 auto}
 #coordLockTtl{max-width:118px}
+
+
+.relay-panel{margin:14px 0;padding:12px;border:1px solid #4a6687;border-radius:10px;background:rgba(8,14,25,.9)}
+.relay-panel h2{font-size:15px;margin:0 0 4px;color:#c8e7ff}
+.relay-panel .hint{margin:4px 0 8px}
+.relay-list{max-height:250px}
+.relay-request{padding:8px;border-bottom:1px solid #29243e}
+.relay-request:last-child{border-bottom:0}
+.relay-prompt{font-size:11px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:100px;overflow:auto;margin:7px 0;color:#e2e8ff}
+.relay-request button{display:block;width:100%;margin-top:7px}
