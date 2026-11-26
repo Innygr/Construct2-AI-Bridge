@@ -52,7 +52,7 @@ For browser preview, use a localhost/127.0.0.1 preview origin. The companion COR
 6. Click **Load into active AI tab**. The extension fills the prompt composer but does not submit it.
 7. Review the prompt and press **Send** on the AI website yourself. Wait for the answer to finish.
 8. Reopen the extension popup on that AI tab and click **Return visible AI reply to Construct 2**.
-9. The plugin receives the result and triggers **On AI response**. Read the answer with the `AIResponse` or `Response` expression.
+9. The plugin receives the result and triggers **On AI response**. Read the answer with the `AIResponse` or `Response` expression. The generic **On request complete** trigger reports that the prompt was successfully queued; use **On AI response** for the final answer.
 
 The extension stores a browser-client identifier locally so the same popup instance can resume a claimed request after it is closed. It checks that the visible assistant text differs from the reply present before the prompt was loaded.
 
