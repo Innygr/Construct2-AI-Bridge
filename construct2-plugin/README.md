@@ -74,12 +74,12 @@ The extension stores a browser-client identifier locally so the same popup insta
 - On project opened
 - On context ready
 - On Ollama status
-- On AI response
+- On AI response (tag-filtered)
 - Is connected
 
 ## Expressions
 
-- `Response`, `AIResponse`, `Error`, `RequestID`, `BaseURL`
+- `Response`, `AIResponse`, `Error`, `RequestID`, `RequestTag`, `BaseURL`
 - `ProjectContext`, `ProjectSHA256`
 - `OllamaModels` (JSON array), `SelectedModel` (for browser requests this is `browser:<provider>`)
 
