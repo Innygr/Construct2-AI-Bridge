@@ -25,6 +25,7 @@ AddCondition(4, cf_trigger, "On project opened", "Project", "On project opened",
 AddCondition(5, cf_trigger, "On context ready", "Project", "On AI context ready", "Triggered after project context has been retrieved.", "OnContextReady");
 AddCondition(6, cf_trigger, "On Ollama status", "Ollama", "On Ollama status received", "Triggered after the local Ollama status has been checked.", "OnOllamaStatus");
 AddCondition(7, cf_none, "Is connected", "Connection", "Is connected", "True when the local bridge has responded successfully.", "IsConnected");
+AddCondition(8, cf_trigger, "On AI response", "Browser AI", "On browser AI response", "Triggered when the browser connector returns the AI response to this request.", "OnAIResponse");
 
 // Actions
 AddStringParam("Base URL", "Loopback URL of the local bridge. Only localhost, 127.0.0.1 and ::1 are accepted.", '"http://127.0.0.1:8765"');
@@ -46,6 +47,19 @@ AddStringParam("System prompt", "Optional system instructions.", '"You are a car
 AddAction(6, 0, "Chat with Ollama", "Ollama", "Send prompt to model <b>{1}</b> (tag <i>{0}</i>)", "Submit a user-requested prompt to a local Ollama model.", "ChatWithOllama");
 AddAction(7, 0, "Cancel requests", "Requests", "Cancel pending requests", "Abort all requests currently in progress.", "CancelRequests");
 
+AddStringParam("Tag", "Tag used by the On AI response and On error triggers.", '"browser-ai"');
+AddComboParamOption("Any connected AI");
+AddComboParamOption("ChatGPT");
+AddComboParamOption("Claude");
+AddComboParamOption("Gemini");
+AddComboParam("Provider", "Choose which signed-in browser AI should receive the prompt.");
+AddStringParam("Prompt", "Prompt to send through the browser connector.", '""');
+AddStringParam("System prompt", "Optional role/instruction prefix to include in the prompt.", '""');
+AddComboParamOption("No");
+AddComboParamOption("Yes");
+AddComboParam("Include project context", "Append the currently loaded project AI context to the prompt.");
+AddAction(8, 0, "Send to Browser AI", "Browser AI", "Send prompt to <b>{1}</b> (tag <i>{0}</i>)", "Queue a prompt for the signed-in browser connector. You must submit it on the AI website and return the visible reply.", "SendToBrowserAI");
+
 // Expressions
 AddExpression(0, ef_return_string, "Last response", "Results", "Response", "Get the last response text or serialized JSON result.");
 AddExpression(1, ef_return_string, "Last error", "Results", "Error", "Get the most recent error message.");
@@ -55,6 +69,7 @@ AddExpression(4, ef_return_string, "Project context", "Project", "ProjectContext
 AddExpression(5, ef_return_string, "Ollama models", "Ollama", "OllamaModels", "Get the installed Ollama model list as JSON.");
 AddExpression(6, ef_return_string, "Project SHA-256", "Project", "ProjectSHA256", "Get the hash returned when the project was opened.");
 AddExpression(7, ef_return_string, "Selected model", "Ollama", "SelectedModel", "Get the model used by the last Ollama request.");
+AddExpression(8, ef_return_string, "AI response", "Browser AI", "AIResponse", "Get the latest response returned through the browser connector.");
 
 ACESDone();
 
