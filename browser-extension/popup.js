@@ -8,6 +8,9 @@ let coordinationPoll = null;
 let lastMessageId = 0;
 let coordinationBusy = false;
 let ownedLocks = [];
+let relayClientId = "";
+let relayPoll = null;
+let relayBusy = false;
 
 const coordinationClient = globalThis.C2AICoordinationClient.createClient(DEFAULT_API_BASE);
 function normalizeApiBase(value) { return globalThis.C2AICoordinationClient.normalizeApiBase(value); }
@@ -325,10 +328,240 @@ async function initializeCoordination() {
   });
   await loadCoordination();
   coordinationPoll = setInterval(loadCoordination, 12000);
+  await initializeRelay();
 }
 window.addEventListener("pagehide", () => {
   if (coordinationPoll !== null) clearInterval(coordinationPoll);
+  if (relayPoll !== null) clearInterval(relayPoll);
 });
+
+
+function relayStatus(message, bad = false) {
+  $("relayStatus").textContent = message;
+  $("relayStatus").classList.toggle("error", bad);
+}
+
+async function relayFetch(path, options = {}) {
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const detail = data.detail;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail || response.statusText));
+  }
+  return data;
+}
+
+async function activeAIConnector() {
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id || !tab.url) throw new Error("Open a signed-in ChatGPT, Claude, or Gemini tab first.");
+  const host = new URL(tab.url).hostname.toLowerCase();
+  const connector = globalThis.C2AIBridgeAdapters.getConnector(host);
+  if (!["chatgpt", "claude", "gemini"].includes(connector.id)) {
+    throw new Error("The active tab is not a supported ChatGPT, Claude, or Gemini page.");
+  }
+  return { tab, connector };
+}
+
+async function fillActiveAIComposer(prompt, expectedProvider) {
+  const { tab, connector } = await activeAIConnector();
+  if (expectedProvider && expectedProvider !== "any" && connector.id !== expectedProvider) {
+    throw new Error("This request requires " + expectedProvider + ", but the active tab is " + connector.label + ".");
+  }
+  const result = await api.scripting.executeScript({
+    target: { tabId: tab.id },
+    args: [prompt, connector.composerSelectors, connector.id],
+    func: (text, selectors, providerId) => {
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+      };
+      let editor = null;
+      for (const selector of selectors) {
+        try { editor = [...document.querySelectorAll(selector)].filter(visible).at(-1); } catch {}
+        if (editor) break;
+      }
+      if (!editor) return { ok: false, reason: "No supported visible " + providerId + " message composer found." };
+      editor.focus();
+      if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) {
+        const proto = editor instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+        setter ? setter.call(editor, text) : editor.value = text;
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        editor.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        let inserted = false;
+        try {
+          editor.focus();
+          document.execCommand("selectAll", false, null);
+          inserted = document.execCommand("insertText", false, text);
+        } catch {}
+        if (!inserted || !(editor.innerText || "").includes(text.slice(0, Math.min(40, text.length)))) {
+          editor.replaceChildren(document.createTextNode(text));
+        }
+        editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+        editor.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return { ok: true, provider: providerId };
+    }
+  });
+  const value = result?.[0]?.result;
+  if (!value?.ok) throw new Error(value?.reason || "Could not fill the active AI tab.");
+  return connector;
+}
+
+async function captureActiveAIReply() {
+  const { tab, connector } = await activeAIConnector();
+  const result = await api.scripting.executeScript({
+    target: { tabId: tab.id },
+    args: [connector.replySelectors],
+    func: (selectors) => {
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      let elements = [];
+      for (const selector of selectors) {
+        elements = [...document.querySelectorAll(selector)].filter(visible);
+        if (elements.length) break;
+      }
+      if (!elements.length) {
+        for (const selector of ['[data-message-author-role="assistant"]', '[data-testid*="conversation-turn"]', 'main']) {
+          elements = [...document.querySelectorAll(selector)].filter(visible);
+          if (elements.length) break;
+        }
+      }
+      const text = elements.map(el => (el.innerText || "").trim()).filter(Boolean).slice(-4).join("\n\n");
+      return text ? { ok: true, text: text.slice(-30000) } : { ok: false, reason: "No visible assistant reply was found. Wait for the AI to finish and try again." };
+    }
+  });
+  const value = result?.[0]?.result;
+  if (!value?.ok) throw new Error(value?.reason || "Could not capture the visible AI response.");
+  return { provider: connector.id, text: value.text };
+}
+
+async function loadRelayRequestIntoTab(item) {
+  try {
+    const { connector } = await activeAIConnector();
+    if (item.provider !== "any" && connector.id !== item.provider) {
+      throw new Error("Open a " + item.provider + " tab to handle this request.");
+    }
+    let claimed = item;
+    if (item.status === "pending") {
+      const result = await relayFetch("/api/ai/requests/" + encodeURIComponent(item.id) + "/claim", {
+        method: "POST",
+        body: JSON.stringify({ client_id: relayClientId, provider: connector.id })
+      });
+      claimed = result.request;
+    } else if (item.status !== "claimed" || item.claimed_by !== relayClientId) {
+      throw new Error("This request is not available to this browser connector.");
+    }
+    const prompt = claimed.system
+      ? claimed.system + "\n\n" + claimed.prompt
+      : claimed.prompt;
+    await fillActiveAIComposer(prompt, claimed.claimed_provider || connector.id);
+    await api.storage.local.set({ aiRelayActiveRequestId: claimed.id });
+    relayStatus("Prompt inserted into " + connector.label + ". Review it and press Send on the AI website; nothing was submitted automatically.");
+    await loadRelayRequests();
+  } catch (error) {
+    relayStatus("Could not load request: " + error.message, true);
+  }
+}
+
+async function returnRelayReply(item) {
+  try {
+    const captured = await captureActiveAIReply();
+    const provider = item.claimed_provider || captured.provider;
+    if (captured.provider !== provider) {
+      throw new Error("The active tab is " + captured.provider + ", but this request belongs to " + provider + ".");
+    }
+    await relayFetch("/api/ai/requests/" + encodeURIComponent(item.id) + "/complete", {
+      method: "POST",
+      body: JSON.stringify({
+        client_id: relayClientId,
+        provider,
+        response: captured.text
+      })
+    });
+    $("reply").value = captured.text;
+    await api.storage.local.remove("aiRelayActiveRequestId");
+    relayStatus("Reply returned to Construct 2. The plugin will receive it automatically.");
+    await loadRelayRequests();
+  } catch (error) {
+    relayStatus("Could not return reply: " + error.message, true);
+  }
+}
+
+function renderRelayRequests(requests) {
+  const list = $("relayRequests");
+  list.replaceChildren();
+  for (const item of requests) {
+    const card = document.createElement("article");
+    card.className = "relay-request";
+    const heading = document.createElement("div");
+    heading.className = "coord-task-heading";
+    const title = document.createElement("strong");
+    title.textContent = item.id + " · " + (item.provider === "any" ? "Any AI" : item.provider);
+    const state = document.createElement("span");
+    state.className = "coord-state";
+    state.textContent = item.status;
+    heading.append(title, state);
+    const prompt = document.createElement("p");
+    prompt.className = "relay-prompt";
+    prompt.textContent = item.prompt.length > 700 ? item.prompt.slice(0, 700) + "…" : item.prompt;
+    card.append(heading, prompt);
+    if (item.status === "pending" || (item.status === "claimed" && item.claimed_by === relayClientId)) {
+      const load = document.createElement("button");
+      load.type = "button";
+      load.className = "secondary";
+      load.textContent = item.status === "pending" ? "Load into active AI tab" : "Reload prompt into active AI tab";
+      load.addEventListener("click", () => loadRelayRequestIntoTab(item));
+      card.append(load);
+    }
+    if (item.status === "claimed" && item.claimed_by === relayClientId) {
+      const complete = document.createElement("button");
+      complete.type = "button";
+      complete.textContent = "Return visible AI reply to Construct 2";
+      complete.addEventListener("click", () => returnRelayReply(item));
+      card.append(complete);
+    }
+    list.append(card);
+  }
+  if (!requests.length) list.textContent = "No pending Construct 2 requests.";
+}
+
+async function loadRelayRequests() {
+  if (relayBusy || !relayClientId) return;
+  relayBusy = true;
+  try {
+    const result = await relayFetch("/api/ai/requests?client_id=" + encodeURIComponent(relayClientId));
+    renderRelayRequests(result.requests || []);
+    if ((result.requests || []).length) relayStatus((result.requests || []).length + " request(s) waiting or assigned to this connector.");
+    else relayStatus("Waiting for Construct 2 requests.");
+  } catch (error) {
+    relayStatus("Could not read request inbox: " + error.message, true);
+  } finally {
+    relayBusy = false;
+  }
+}
+
+async function initializeRelay() {
+  try {
+    const saved = await api.storage.local.get(["aiRelayClientId"]);
+    relayClientId = typeof saved.aiRelayClientId === "string" ? saved.aiRelayClientId : "";
+    if (!/^[a-zA-Z0-9-]{8,128}$/.test(relayClientId)) {
+      relayClientId = (globalThis.crypto?.randomUUID?.() || ("browser-" + Math.random().toString(36).slice(2) + Date.now().toString(36)));
+      await api.storage.local.set({ aiRelayClientId: relayClientId });
+    }
+    $("relayRefresh").addEventListener("click", loadRelayRequests);
+    await loadRelayRequests();
+    relayPoll = setInterval(loadRelayRequests, 5000);
+  } catch (error) {
+    relayStatus("Could not initialize browser request relay: " + error.message, true);
+  }
+}
 
 async function detectProvider() {
   try {
