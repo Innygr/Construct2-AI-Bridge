@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Construct 2 AI Bridge — Browser Connector",
-  "version": "0.4.0",
-  "description": "User-controlled Construct 2 project context and supervised collaboration with ChatGPT, Claude, and Gemini.",
+  "version": "0.5.0",
+  "description": "User-controlled Construct 2 project context, browser AI request relay, and supervised collaboration with ChatGPT, Claude, and Gemini.",
   "permissions": [
     "activeTab",
     "scripting",
